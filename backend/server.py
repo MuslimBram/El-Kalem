@@ -263,7 +263,7 @@ async def get_dashboard_stats():
     websites_count = await db.websites.count_documents({})
     posts_count = await db.social_posts.count_documents({})
     scheduled_count = await db.social_posts.count_documents({"status": "scheduled"})
-    today_events = await db.calendar_events.count_documents({"date": date.today()})
+    today_events = await db.calendar_events.count_documents({"date": date.today().isoformat()})
     
     return {
         "total_websites": websites_count,
