@@ -249,10 +249,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Website Management API"
-    - "Social Posts Management API"
-    - "Calendar Events API"
-    - "Dashboard Stats API"
+    - "Social Media Calendar Interface"
+    - "Website Management Interface" 
+    - "Social Posts Management Interface"
+    - "AI Content Generation Interface"
+    - "Dashboard with Statistics"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
