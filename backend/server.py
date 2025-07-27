@@ -234,11 +234,11 @@ async def get_calendar_events(website_id: Optional[str] = None, date_from: Optio
     if website_id:
         query["website_id"] = website_id
     if date_from and date_to:
-        query["date"] = {"$gte": date_from, "$lte": date_to}
+        query["date"] = {"$gte": date_from.isoformat(), "$lte": date_to.isoformat()}
     elif date_from:
-        query["date"] = {"$gte": date_from}
+        query["date"] = {"$gte": date_from.isoformat()}
     elif date_to:
-        query["date"] = {"$lte": date_to}
+        query["date"] = {"$lte": date_to.isoformat()}
     
     events = await db.calendar_events.find(query).to_list(1000)
     return [CalendarEvent(**event) for event in events]
