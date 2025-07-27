@@ -5,974 +5,783 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Components
-const Sidebar = ({ activeTab, setActiveTab, stats }) => {
-  const menuItems = [
-    { id: 'dashboard', name: 'Dashboard', icon: '📊' },
-    { id: 'calendar', name: 'Kalendari', icon: '📅' },
-    { id: 'websites', name: 'Website-et', icon: '🌐' },
-    { id: 'posts', name: 'Postimet', icon: '📝' },
-    { id: 'content', name: 'Gjenerimi AI', icon: '🤖' },
-  ];
-
+// Import A-Frame components (loaded via script tags in public/index.html)
+const VRShop = ({ products, shopSettings, onProductClick }) => {
   return (
-    <div className="w-64 bg-gray-900 text-white min-h-screen p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-blue-400">SocialManager</h1>
-        <p className="text-gray-400 text-sm mt-1">Menaxhoni rrjetet sociale</p>
-      </div>
-      
-      <nav className="space-y-2">
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`w-full text-left p-3 rounded-lg flex items-center space-x-3 transition-colors ${
-              activeTab === item.id 
-                ? 'bg-blue-600 text-white' 
-                : 'text-gray-300 hover:bg-gray-800'
-            }`}
-          >
-            <span className="text-xl">{item.icon}</span>
-            <span>{item.name}</span>
-          </button>
-        ))}
-      </nav>
+    <div id="vr-container">
+      <a-scene 
+        embedded 
+        style={{width: '100%', height: '100vh'}}
+        vr-mode-ui="enabled: true"
+        device-orientation-permission-ui="enabled: true"
+        loading-screen="dotsColor: white; backgroundColor: #1a1a2e"
+        background={`color: ${shopSettings?.background_color || '#87CEEB'}`}
+        fog="type: linear; color: #74b9ff; near: 0; far: 50"
+      >
+        {/* Assets */}
+        <a-assets>
+          {/* Fonts */}
+          <a-asset-item id="roboto-font" src="https://cdn.aframe.io/fonts/Roboto-msdf.json"></a-asset-item>
+          
+          {/* Materials */}
+          <a-mixin id="floor" 
+            geometry="primitive: box; width: 20; height: 0.1; depth: 20"
+            material="color: #f8f9fa; roughness: 0.1; metalness: 0.1"
+          ></a-mixin>
+          
+          <a-mixin id="wall"
+            geometry="primitive: box; width: 20; height: 6; depth: 0.2"
+            material="color: #ffffff; roughness: 0.3"
+          ></a-mixin>
 
-      {stats && (
-        <div className="mt-8 p-4 bg-gray-800 rounded-lg">
-          <h3 className="text-sm font-semibold text-gray-400 mb-3">Statistika të Shpejta</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Website-e:</span>
-              <span className="text-blue-400">{stats.total_websites}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Postime:</span>
-              <span className="text-green-400">{stats.total_posts}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Të planifikuara:</span>
-              <span className="text-yellow-400">{stats.scheduled_posts}</span>
-            </div>
-          </div>
-        </div>
-      )}
+          <a-mixin id="pillar"
+            geometry="primitive: cylinder; height: 6; radius: 0.3"
+            material="color: #e9ecef; roughness: 0.2; metalness: 0.3"
+          ></a-mixin>
+        </a-assets>
+
+        {/* Lighting */}
+        <a-light type="ambient" color="#404040" intensity={shopSettings?.lighting_intensity || 1.0}></a-light>
+        <a-light type="directional" position="5 10 5" color="#ffffff" intensity="0.8" 
+          light="castShadow: true"
+        ></a-light>
+        <a-light type="point" position="-5 5 -5" color="#74b9ff" intensity="0.3"></a-light>
+        <a-light type="point" position="5 5 5" color="#fd79a8" intensity="0.2"></a-light>
+
+        {/* Shop Environment */}
+        {/* Floor */}
+        <a-entity mixin="floor" position="0 0 0" shadow="receive: true"></a-entity>
+        
+        {/* Walls */}
+        <a-entity mixin="wall" position="0 3 -10" shadow="receive: true"></a-entity>
+        <a-entity mixin="wall" position="0 3 10" shadow="receive: true"></a-entity>
+        <a-entity mixin="wall" position="-10 3 0" rotation="0 90 0" shadow="receive: true"></a-entity>
+        <a-entity mixin="wall" position="10 3 0" rotation="0 90 0" shadow="receive: true"></a-entity>
+
+        {/* Ceiling */}
+        <a-box 
+          position="0 6 0" 
+          width="20" 
+          height="0.1" 
+          depth="20"
+          material="color: #ffffff; roughness: 0.1"
+          shadow="receive: true"
+        ></a-box>
+
+        {/* Pillars */}
+        <a-entity mixin="pillar" position="-7 3 -7" shadow="cast: true; receive: true"></a-entity>
+        <a-entity mixin="pillar" position="7 3 -7" shadow="cast: true; receive: true"></a-entity>
+        <a-entity mixin="pillar" position="-7 3 7" shadow="cast: true; receive: true"></a-entity>
+        <a-entity mixin="pillar" position="7 3 7" shadow="cast: true; receive: true"></a-entity>
+
+        {/* Welcome Sign */}
+        <a-text 
+          position="0 4 -9.5"
+          value={`Mirë se vini në ${shopSettings?.shop_name || 'Dyqani VR Modern'}`}
+          color="#2d3436"
+          font="roboto-font"
+          width="20"
+          align="center"
+          shadow="cast: true"
+        ></a-text>
+
+        {/* Products */}
+        {products.map((product, index) => (
+          <a-entity key={product.id} position={`${product.position.x} ${product.position.y} ${product.position.z}`}>
+            {/* Product Display Platform */}
+            <a-cylinder 
+              position="0 0.05 0"
+              radius="0.8" 
+              height="0.1"
+              material="color: #ffffff; roughness: 0.1; metalness: 0.8"
+              shadow="cast: true; receive: true"
+            ></a-cylinder>
+
+            {/* Product 3D Model or Placeholder */}
+            {product.model_3d_url ? (
+              <a-entity
+                gltf-model={`${BACKEND_URL}${product.model_3d_url}`}
+                position="0 0.5 0"
+                rotation={`${product.rotation.x} ${product.rotation.y} ${product.rotation.z}`}
+                scale={`${product.scale.x} ${product.scale.y} ${product.scale.z}`}
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 10000"
+                class="product-model"
+                shadow="cast: true"
+                onClick={() => onProductClick && onProductClick(product)}
+              ></a-entity>
+            ) : (
+              // Placeholder box
+              <a-box 
+                position="0 0.5 0"
+                width="0.8" 
+                height="0.8" 
+                depth="0.8"
+                material="color: #74b9ff; roughness: 0.3; metalness: 0.2"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 8000"
+                class="product-placeholder"
+                shadow="cast: true"
+                onClick={() => onProductClick && onProductClick(product)}
+              ></a-box>
+            )}
+
+            {/* Product Info Panel */}
+            <a-plane 
+              position="0 1.8 0"
+              width="2" 
+              height="1"
+              material="color: rgba(255, 255, 255, 0.9); transparent: true"
+              geometry="primitive: plane"
+              shadow="cast: true"
+              look-at="#camera"
+            >
+              <a-text 
+                position="0 0.3 0.01"
+                value={product.name}
+                color="#2d3436"
+                font="roboto-font"
+                width="8"
+                align="center"
+                wrap-count="20"
+              ></a-text>
+              <a-text 
+                position="0 0 0.01"
+                value={`€${product.price}`}
+                color="#e17055"
+                font="roboto-font"
+                width="6"
+                align="center"
+              ></a-text>
+              <a-text 
+                position="0 -0.3 0.01"
+                value={product.category}
+                color="#636e72"
+                font="roboto-font"
+                width="4"
+                align="center"
+              ></a-text>
+            </a-plane>
+          </a-entity>
+        ))}
+
+        {/* Navigation Instructions */}
+        <a-text 
+          position="0 0.2 5"
+          value="Përdorni WASD ose shigjetat për të lëvizur • Klikoni produktet për detaje"
+          color="#636e72"
+          font="roboto-font"
+          width="8"
+          align="center"
+        ></a-text>
+
+        {/* Camera with controls */}
+        <a-entity id="rig" position="0 1.6 8">
+          <a-camera 
+            id="camera"
+            cursor="rayOrigin: mouse"
+            raycaster="objects: .product-model, .product-placeholder"
+            look-controls="pointerLockEnabled: true"
+            wasd-controls="acceleration: 20"
+          >
+            <a-cursor 
+              geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
+              material="color: #74b9ff; shader: flat"
+              animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
+              animation__fusing="property: scale; startEvents: fusing; from: 1 1 1; to: 0.1 0.1 0.1; dur: 1500"
+            ></a-cursor>
+          </a-camera>
+        </a-entity>
+
+        {/* VR Controllers (for VR headsets) */}
+        <a-entity 
+          id="leftController" 
+          hand-controls="hand: left"
+          laser-controls="hand: left"
+          raycaster="objects: .product-model, .product-placeholder"
+        ></a-entity>
+        <a-entity 
+          id="rightController" 
+          hand-controls="hand: right"
+          laser-controls="hand: right"
+          raycaster="objects: .product-model, .product-placeholder"
+        ></a-entity>
+      </a-scene>
     </div>
   );
 };
 
-const Dashboard = ({ stats }) => (
-  <div className="p-6">
-    <h2 className="text-3xl font-bold text-gray-800 mb-6">Dashboard</h2>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-        <div className="flex items-center">
-          <div className="text-3xl text-blue-500 mr-4">🌐</div>
-          <div>
-            <p className="text-gray-600 text-sm">Total Website-e</p>
-            <p className="text-2xl font-bold text-gray-800">{stats?.total_websites || 0}</p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
-        <div className="flex items-center">
-          <div className="text-3xl text-green-500 mr-4">📝</div>
-          <div>
-            <p className="text-gray-600 text-sm">Total Postime</p>
-            <p className="text-2xl font-bold text-gray-800">{stats?.total_posts || 0}</p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-yellow-500">
-        <div className="flex items-center">
-          <div className="text-3xl text-yellow-500 mr-4">⏰</div>
-          <div>
-            <p className="text-gray-600 text-sm">Të Planifikuara</p>
-            <p className="text-2xl font-bold text-gray-800">{stats?.scheduled_posts || 0}</p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
-        <div className="flex items-center">
-          <div className="text-3xl text-purple-500 mr-4">📅</div>
-          <div>
-            <p className="text-gray-600 text-sm">Ngjarje Sot</p>
-            <p className="text-2xl font-bold text-gray-800">{stats?.today_events || 0}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div className="bg-white rounded-xl shadow-lg p-6">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">Aktivitetet e Fundit</h3>
-      <p className="text-gray-600">Statistikat e detajuara do të shfaqen këtu pasi të krijoni website-e dhe postime.</p>
-    </div>
-  </div>
-);
-
-const WebsiteManager = ({ websites, setWebsites }) => {
-  const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({
+const AdminPanel = ({ 
+  products, 
+  setProducts, 
+  shopSettings, 
+  setShopSettings, 
+  categories,
+  analytics 
+}) => {
+  const [activeTab, setActiveTab] = useState('products');
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [showUploadModal, setShowUploadModal] = useState(null);
+  
+  const [productForm, setProductForm] = useState({
     name: '',
-    url: '',
     description: '',
-    connected_platforms: []
+    price: '',
+    category: '',
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 }
   });
 
-  const platforms = [
-    { value: 'facebook', label: 'Facebook', icon: '📘' },
-    { value: 'instagram', label: 'Instagram', icon: '📷' },
-    { value: 'twitter', label: 'Twitter/X', icon: '🐦' },
-    { value: 'linkedin', label: 'LinkedIn', icon: '💼' },
-    { value: 'tiktok', label: 'TikTok', icon: '🎵' },
-    { value: 'youtube', label: 'YouTube', icon: '📺' },
-    { value: 'pinterest', label: 'Pinterest', icon: '📌' },
-    { value: 'telegram', label: 'Telegram', icon: '✈️' },
-  ];
+  const [shopForm, setShopForm] = useState({
+    shop_name: '',
+    background_color: '#87CEEB',
+    lighting_intensity: 1.0
+  });
 
-  const handleSubmit = async (e) => {
+  useEffect(() => {
+    if (shopSettings) {
+      setShopForm({
+        shop_name: shopSettings.shop_name || '',
+        background_color: shopSettings.background_color || '#87CEEB',
+        lighting_intensity: shopSettings.lighting_intensity || 1.0
+      });
+    }
+  }, [shopSettings]);
+
+  const handleProductSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post(`${API}/websites`, formData);
-      setWebsites([...websites, response.data]);
-      setFormData({ name: '', url: '', description: '', connected_platforms: [] });
-      setShowModal(false);
+      const productData = {
+        ...productForm,
+        price: parseFloat(productForm.price)
+      };
+
+      let response;
+      if (editingProduct) {
+        response = await axios.put(`${API}/products/${editingProduct.id}`, productData);
+        setProducts(products.map(p => p.id === editingProduct.id ? response.data : p));
+      } else {
+        response = await axios.post(`${API}/products`, productData);
+        setProducts([...products, response.data]);
+      }
+
+      setProductForm({
+        name: '', description: '', price: '', category: '',
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 }
+      });
+      setEditingProduct(null);
+      setShowProductModal(false);
     } catch (error) {
-      console.error('Error creating website:', error);
+      console.error('Error saving product:', error);
     }
   };
 
-  const togglePlatform = (platform) => {
-    setFormData(prev => ({
-      ...prev,
-      connected_platforms: prev.connected_platforms.includes(platform)
-        ? prev.connected_platforms.filter(p => p !== platform)
-        : [...prev.connected_platforms, platform]
-    }));
+  const handleDeleteProduct = async (productId) => {
+    if (window.confirm('Jeni i sigurt që doni ta fshini këtë produkt?')) {
+      try {
+        await axios.delete(`${API}/products/${productId}`);
+        setProducts(products.filter(p => p.id !== productId));
+      } catch (error) {
+        console.error('Error deleting product:', error);
+      }
+    }
+  };
+
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setProductForm({
+      name: product.name,
+      description: product.description,
+      price: product.price.toString(),
+      category: product.category,
+      position: product.position,
+      rotation: product.rotation,
+      scale: product.scale
+    });
+    setShowProductModal(true);
+  };
+
+  const handleFileUpload = async (productId, file, type, format = null) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (format) formData.append('format', format);
+
+    try {
+      const endpoint = type === '3d' ? 
+        `${API}/products/${productId}/upload-3d-model` :
+        `${API}/products/${productId}/upload-thumbnail`;
+      
+      const response = await axios.post(endpoint, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      // Reload products to show updated URLs
+      const productsResponse = await axios.get(`${API}/products`);
+      setProducts(productsResponse.data);
+      
+      setShowUploadModal(null);
+      alert('Skedari u ngarkua me sukses!');
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Gabim gjatë ngarkimit të skedarit');
+    }
+  };
+
+  const handleShopSettingsSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.put(`${API}/shop-settings`, shopForm);
+      setShopSettings(response.data);
+      alert('Konfigurimi u ruajt me sukses!');
+    } catch (error) {
+      console.error('Error updating shop settings:', error);
+    }
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">Website-et</h2>
+    <div className="admin-panel">
+      {/* Tab Navigation */}
+      <div className="tab-nav">
         <button 
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          className={activeTab === 'products' ? 'active' : ''} 
+          onClick={() => setActiveTab('products')}
         >
-          + Shto Website
+          Produktet ({products.length})
+        </button>
+        <button 
+          className={activeTab === 'settings' ? 'active' : ''} 
+          onClick={() => setActiveTab('settings')}
+        >
+          Konfigurimi
+        </button>
+        <button 
+          className={activeTab === 'analytics' ? 'active' : ''} 
+          onClick={() => setActiveTab('analytics')}
+        >
+          Statistikat
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {websites.map((website) => (
-          <div key={website.id} className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">{website.name}</h3>
-            <p className="text-blue-600 text-sm mb-3">{website.url}</p>
-            {website.description && (
-              <p className="text-gray-600 text-sm mb-4">{website.description}</p>
-            )}
-            
-            <div className="flex flex-wrap gap-2 mb-4">
-              {website.connected_platforms.map((platform) => {
-                const platformInfo = platforms.find(p => p.value === platform);
-                return (
-                  <span key={platform} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                    {platformInfo?.icon} {platformInfo?.label}
-                  </span>
-                );
-              })}
-            </div>
-            
-            <div className="text-xs text-gray-500">
-              Krijuar: {new Date(website.created_at).toLocaleDateString('sq-AL')}
-            </div>
+      {/* Products Tab */}
+      {activeTab === 'products' && (
+        <div className="tab-content">
+          <div className="tab-header">
+            <h2>Menaxhimi i Produkteve</h2>
+            <button className="btn-primary" onClick={() => setShowProductModal(true)}>
+              + Shto Produkt
+            </button>
           </div>
-        ))}
-      </div>
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Shto Website të Ri</h3>
-            
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Emri i Website-it *
-                </label>
-                <input 
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  URL *
-                </label>
-                <input 
-                  type="url"
-                  value={formData.url}
-                  onChange={(e) => setFormData({...formData, url: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Përshkrimi
-                </label>
-                <textarea 
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows="3"
-                />
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Zgjidhni Platformat Sociale
-                </label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {platforms.map((platform) => (
-                    <button
-                      key={platform.value}
-                      type="button"
-                      onClick={() => togglePlatform(platform.value)}
-                      className={`p-3 rounded-lg border text-sm transition-colors ${
-                        formData.connected_platforms.includes(platform.value)
-                          ? 'bg-blue-100 border-blue-500 text-blue-800'
-                          : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <div className="text-center">
-                        <div className="text-lg mb-1">{platform.icon}</div>
-                        <div className="text-xs">{platform.label}</div>
-                      </div>
-                    </button>
-                  ))}
+          <div className="products-grid">
+            {products.map(product => (
+              <div key={product.id} className="product-card">
+                <div className="product-image">
+                  {product.thumbnail_url ? (
+                    <img src={`${BACKEND_URL}${product.thumbnail_url}`} alt={product.name} />
+                  ) : (
+                    <div className="placeholder-image">📦</div>
+                  )}
                 </div>
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button 
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Anulo
-                </button>
-                <button 
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Krijo Website
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const CalendarView = ({ websites, calendarEvents, setCalendarEvents }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [showModal, setShowModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [formData, setFormData] = useState({
-    website_id: '',
-    title: '',
-    description: '',
-    time: '',
-    type: 'generation',
-    platform: ''
-  });
-
-  const eventTypes = [
-    { value: 'generation', label: 'Gjenerim Përmbajtjeje', color: 'bg-blue-500' },
-    { value: 'posting', label: 'Postim', color: 'bg-green-500' },
-    { value: 'monitoring', label: 'Mbikëqyrje', color: 'bg-purple-500' }
-  ];
-
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-
-    const days = [];
-    
-    // Add empty cells for days before month starts
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    
-    // Add days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(new Date(year, month, day));
-    }
-    
-    return days;
-  };
-
-  const getEventsForDate = (date) => {
-    if (!date) return [];
-    const dateStr = date.toISOString().split('T')[0];
-    return calendarEvents.filter(event => event.date === dateStr);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const eventData = {
-        ...formData,
-        date: selectedDate.toISOString().split('T')[0]
-      };
-      const response = await axios.post(`${API}/calendar`, eventData);
-      setCalendarEvents([...calendarEvents, response.data]);
-      setFormData({ website_id: '', title: '', description: '', time: '', type: 'generation', platform: '' });
-      setShowModal(false);
-    } catch (error) {
-      console.error('Error creating event:', error);
-    }
-  };
-
-  const days = getDaysInMonth(currentDate);
-  const monthNames = [
-    'Janar', 'Shkurt', 'Mars', 'Prill', 'Maj', 'Qershor',
-    'Korrik', 'Gusht', 'Shtator', 'Tetor', 'Nëntor', 'Dhjetor'
-  ];
-
-  return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">Kalendari i Punës</h2>
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
-            className="p-2 hover:bg-gray-200 rounded-lg"
-          >
-            ‹
-          </button>
-          <h3 className="text-xl font-semibold">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </h3>
-          <button 
-            onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
-            className="p-2 hover:bg-gray-200 rounded-lg"
-          >
-            ›
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="grid grid-cols-7 gap-0 bg-gray-50">
-          {['Diel', 'Hën', 'Mar', 'Mër', 'Enj', 'Pre', 'Sht'].map(day => (
-            <div key={day} className="p-4 text-center font-semibold text-gray-700 border-b">
-              {day}
-            </div>
-          ))}
-        </div>
-        
-        <div className="grid grid-cols-7 gap-0">
-          {days.map((day, index) => (
-            <div 
-              key={index} 
-              className={`min-h-[120px] p-2 border-b border-r border-gray-200 ${
-                day ? 'cursor-pointer hover:bg-gray-50' : 'bg-gray-100'
-              }`}
-              onClick={() => {
-                if (day) {
-                  setSelectedDate(day);
-                  setShowModal(true);
-                }
-              }}
-            >
-              {day && (
-                <>
-                  <div className="font-semibold text-gray-800 mb-1">
-                    {day.getDate()}
-                  </div>
-                  <div className="space-y-1">
-                    {getEventsForDate(day).slice(0, 2).map((event, idx) => {
-                      const eventType = eventTypes.find(t => t.value === event.type);
-                      return (
-                        <div 
-                          key={idx}
-                          className={`text-xs text-white p-1 rounded ${eventType?.color || 'bg-gray-500'}`}
-                        >
-                          {event.time} - {event.title}
-                        </div>
-                      );
-                    })}
-                    {getEventsForDate(day).length > 2 && (
-                      <div className="text-xs text-gray-500">
-                        +{getEventsForDate(day).length - 2} më shumë
-                      </div>
+                
+                <div className="product-info">
+                  <h3>{product.name}</h3>
+                  <p className="category">{product.category}</p>
+                  <p className="price">€{product.price}</p>
+                  <p className="description">{product.description}</p>
+                  
+                  <div className="model-status">
+                    {product.model_3d_url ? (
+                      <span className="has-model">✅ Ka model 3D ({product.model_3d_format})</span>
+                    ) : (
+                      <span className="no-model">❌ Nuk ka model 3D</span>
                     )}
                   </div>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">
-              Shto Ngjarje - {selectedDate?.toLocaleDateString('sq-AL')}
-            </h3>
-            
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Website *
-                </label>
-                <select 
-                  value={formData.website_id}
-                  onChange={(e) => setFormData({...formData, website_id: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Zgjidhni Website</option>
-                  {websites.map(website => (
-                    <option key={website.id} value={website.id}>{website.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Titulli *
-                </label>
-                <input 
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({...formData, title: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Ora *
-                </label>
-                <input 
-                  type="time"
-                  value={formData.time}
-                  onChange={(e) => setFormData({...formData, time: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Lloji *
-                </label>
-                <select 
-                  value={formData.type}
-                  onChange={(e) => setFormData({...formData, type: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  {eventTypes.map(type => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Përshkrimi
-                </label>
-                <textarea 
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  rows="3"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button 
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Anulo
-                </button>
-                <button 
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Shto Ngjarje
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const PostManager = ({ websites, posts, setPosts }) => {
-  const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({
-    website_id: '',
-    platform: '',
-    content: '',
-    scheduled_time: '',
-    media_urls: []
-  });
-
-  const platforms = [
-    { value: 'facebook', label: 'Facebook', icon: '📘' },
-    { value: 'instagram', label: 'Instagram', icon: '📷' },
-    { value: 'twitter', label: 'Twitter/X', icon: '🐦' },
-    { value: 'linkedin', label: 'LinkedIn', icon: '💼' },
-    { value: 'tiktok', label: 'TikTok', icon: '🎵' },
-    { value: 'youtube', label: 'YouTube', icon: '📺' },
-  ];
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post(`${API}/posts`, formData);
-      setPosts([...posts, response.data]);
-      setFormData({ website_id: '', platform: '', content: '', scheduled_time: '', media_urls: [] });
-      setShowModal(false);
-    } catch (error) {
-      console.error('Error creating post:', error);
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'scheduled': return 'bg-yellow-100 text-yellow-800';
-      case 'posted': return 'bg-green-100 text-green-800';
-      case 'failed': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">Menaxhimi i Postimeve</h2>
-        <button 
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          + Krijo Postim
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        {posts.map((post) => {
-          const website = websites.find(w => w.id === post.website_id);
-          const platform = platforms.find(p => p.value === post.platform);
-          
-          return (
-            <div key={post.id} className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center space-x-3">
-                  <span className="text-2xl">{platform?.icon}</span>
-                  <div>
-                    <h3 className="font-semibold text-gray-800">{platform?.label}</h3>
-                    <p className="text-sm text-gray-600">{website?.name}</p>
-                  </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(post.status)}`}>
-                  {post.status}
-                </span>
+
+                <div className="product-actions">
+                  <button 
+                    className="btn-edit" 
+                    onClick={() => handleEditProduct(product)}
+                  >
+                    Modifiko
+                  </button>
+                  <button 
+                    className="btn-upload" 
+                    onClick={() => setShowUploadModal(product.id)}
+                  >
+                    Ngarko Skedar
+                  </button>
+                  <button 
+                    className="btn-delete" 
+                    onClick={() => handleDeleteProduct(product.id)}
+                  >
+                    Fshi
+                  </button>
+                </div>
               </div>
-              
-              <p className="text-gray-700 mb-4">{post.content}</p>
-              
-              <div className="text-sm text-gray-500">
-                <p>Planifikuar për: {new Date(post.scheduled_time).toLocaleString('sq-AL')}</p>
-                <p>Krijuar: {new Date(post.created_at).toLocaleString('sq-AL')}</p>
-                {post.ai_generated && <p className="text-blue-600">✨ Gjeneruar me AI</p>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Krijo Postim të Ri</h3>
-            
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Website *
-                </label>
-                <select 
-                  value={formData.website_id}
-                  onChange={(e) => setFormData({...formData, website_id: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Zgjidhni Website</option>
-                  {websites.map(website => (
-                    <option key={website.id} value={website.id}>{website.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Platforma *
-                </label>
-                <select 
-                  value={formData.platform}
-                  onChange={(e) => setFormData({...formData, platform: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Zgjidhni Platformën</option>
-                  {platforms.map(platform => (
-                    <option key={platform.value} value={platform.value}>
-                      {platform.icon} {platform.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Përmbajtja *
-                </label>
-                <textarea 
-                  value={formData.content}
-                  onChange={(e) => setFormData({...formData, content: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  rows="5"
-                  required
-                />
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Data dhe Ora e Postimit *
-                </label>
-                <input 
-                  type="datetime-local"
-                  value={formData.scheduled_time}
-                  onChange={(e) => setFormData({...formData, scheduled_time: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button 
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Anulo
-                </button>
-                <button 
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Krijo Postim
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const ContentGenerator = ({ websites }) => {
-  const [formData, setFormData] = useState({
-    website_id: '',
-    platform: '',
-    prompt: '',
-    tone: 'professional',
-    length: 'medium'
-  });
-  const [generatedContent, setGeneratedContent] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [aiReady, setAiReady] = useState(false);
-
-  const platforms = [
-    { value: 'facebook', label: 'Facebook', icon: '📘' },
-    { value: 'instagram', label: 'Instagram', icon: '📷' },
-    { value: 'twitter', label: 'Twitter/X', icon: '🐦' },
-    { value: 'linkedin', label: 'LinkedIn', icon: '💼' },
-    { value: 'tiktok', label: 'TikTok', icon: '🎵' },
-    { value: 'youtube', label: 'YouTube', icon: '📺' },
-  ];
-
-  const tones = [
-    { value: 'professional', label: 'Profesional' },
-    { value: 'friendly', label: 'Miqësor' },
-    { value: 'casual', label: 'Joformale' },
-    { value: 'energetic', label: 'Energjik' },
-    { value: 'informative', label: 'Informues' }
-  ];
-
-  const lengths = [
-    { value: 'short', label: 'Shkurt' },
-    { value: 'medium', label: 'Mesatar' },
-    { value: 'long', label: 'I gjatë' }
-  ];
-
-  const handleGenerate = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      const response = await axios.post(`${API}/generate-content`, formData);
-      setGeneratedContent(response.data.generated_content);
-      setAiReady(response.data.ai_ready);
-    } catch (error) {
-      console.error('Error generating content:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="p-6">
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">Gjenerimi i Përmbajtjes me AI</h2>
-      
-      {!aiReady && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center">
-            <div className="text-yellow-600 mr-3">⚠️</div>
-            <div>
-              <h3 className="font-semibold text-yellow-800">OpenAI API Key i nevojshëm</h3>
-              <p className="text-yellow-700 text-sm">
-                Për të aktivizuar gjenerimin e përmbajtjes, ju lutemi shtoni çelësin OpenAI API në konfigurimin e aplikacionit.
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Konfigurimi i Gjenerimit</h3>
+      {/* Settings Tab */}
+      {activeTab === 'settings' && (
+        <div className="tab-content">
+          <h2>Konfigurimi i Dyqanit</h2>
           
-          <form onSubmit={handleGenerate}>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Website *
-              </label>
-              <select 
-                value={formData.website_id}
-                onChange={(e) => setFormData({...formData, website_id: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Zgjidhni Website</option>
-                {websites.map(website => (
-                  <option key={website.id} value={website.id}>{website.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Platforma *
-              </label>
-              <select 
-                value={formData.platform}
-                onChange={(e) => setFormData({...formData, platform: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Zgjidhni Platformën</option>
-                {platforms.map(platform => (
-                  <option key={platform.value} value={platform.value}>
-                    {platform.icon} {platform.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Toni *
-              </label>
-              <select 
-                value={formData.tone}
-                onChange={(e) => setFormData({...formData, tone: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                {tones.map(tone => (
-                  <option key={tone.value} value={tone.value}>{tone.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Gjatësia *
-              </label>
-              <select 
-                value={formData.length}
-                onChange={(e) => setFormData({...formData, length: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                {lengths.map(length => (
-                  <option key={length.value} value={length.value}>{length.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Përshkrimi/Tema *
-              </label>
-              <textarea 
-                value={formData.prompt}
-                onChange={(e) => setFormData({...formData, prompt: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                rows="4"
-                placeholder="Shkruani temën ose përshkrimin e postimit që doni të gjeneroni..."
+          <form onSubmit={handleShopSettingsSubmit} className="settings-form">
+            <div className="form-group">
+              <label>Emri i Dyqanit:</label>
+              <input 
+                type="text"
+                value={shopForm.shop_name}
+                onChange={(e) => setShopForm({...shopForm, shop_name: e.target.value})}
                 required
               />
             </div>
 
-            <button 
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
-            >
-              {loading ? '⏳ Duke gjeneruar...' : '🤖 Gjeneroni Përmbajtjen'}
-            </button>
+            <div className="form-group">
+              <label>Ngjyra e Sfondit:</label>
+              <input 
+                type="color"
+                value={shopForm.background_color}
+                onChange={(e) => setShopForm({...shopForm, background_color: e.target.value})}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Intensiteti i Dritës:</label>
+              <input 
+                type="range"
+                min="0.1"
+                max="2"
+                step="0.1"
+                value={shopForm.lighting_intensity}
+                onChange={(e) => setShopForm({...shopForm, lighting_intensity: parseFloat(e.target.value)})}
+              />
+              <span>{shopForm.lighting_intensity}</span>
+            </div>
+
+            <button type="submit" className="btn-primary">Ruaj Konfigurimin</button>
           </form>
         </div>
+      )}
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Rezultati i Gjeneruar</h3>
+      {/* Analytics Tab */}
+      {activeTab === 'analytics' && (
+        <div className="tab-content">
+          <h2>Statistikat e Dyqanit</h2>
           
-          {generatedContent ? (
-            <div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-                <textarea 
-                  value={generatedContent}
-                  onChange={(e) => setGeneratedContent(e.target.value)}
-                  className="w-full h-64 p-3 border-none bg-transparent resize-none focus:ring-0"
-                  placeholder="Përmbajtja e gjeneruar do të shfaqet këtu..."
+          <div className="analytics-cards">
+            <div className="analytics-card">
+              <h3>Produktet Totale</h3>
+              <div className="big-number">{analytics?.total_products || 0}</div>
+            </div>
+            
+            <div className="analytics-card">
+              <h3>Kategoritë</h3>
+              <div className="big-number">{analytics?.total_categories || 0}</div>
+            </div>
+            
+            <div className="analytics-card">
+              <h3>Me Modele 3D</h3>
+              <div className="big-number">{analytics?.products_with_3d_models || 0}</div>
+            </div>
+            
+            <div className="analytics-card">
+              <h3>Përqindja e Plotësuar</h3>
+              <div className="big-number">{Math.round(analytics?.completion_rate || 0)}%</div>
+            </div>
+          </div>
+
+          <div className="categories-list">
+            <h3>Kategoritë</h3>
+            {categories?.map(cat => (
+              <div key={cat.name} className="category-item">
+                <span>{cat.name}</span>
+                <span>{cat.count} produkte</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Product Modal */}
+      {showProductModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>{editingProduct ? 'Modifiko Produktin' : 'Shto Produkt të Ri'}</h3>
+            
+            <form onSubmit={handleProductSubmit}>
+              <div className="form-group">
+                <label>Emri:</label>
+                <input 
+                  type="text"
+                  value={productForm.name}
+                  onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                  required
                 />
               </div>
-              
-              <div className="flex space-x-3">
-                <button 
-                  onClick={() => navigator.clipboard.writeText(generatedContent)}
-                  className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"
-                >
-                  📋 Kopjo Tekstin
+
+              <div className="form-group">
+                <label>Përshkrimi:</label>
+                <textarea 
+                  value={productForm.description}
+                  onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Çmimi (€):</label>
+                <input 
+                  type="number"
+                  step="0.01"
+                  value={productForm.price}
+                  onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Kategoria:</label>
+                <input 
+                  type="text"
+                  value={productForm.category}
+                  onChange={(e) => setProductForm({...productForm, category: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="position-controls">
+                <h4>Pozicioni në VR (X, Y, Z):</h4>
+                <div className="xyz-inputs">
+                  <input 
+                    type="number"
+                    placeholder="X"
+                    value={productForm.position.x}
+                    onChange={(e) => setProductForm({
+                      ...productForm, 
+                      position: {...productForm.position, x: parseFloat(e.target.value) || 0}
+                    })}
+                  />
+                  <input 
+                    type="number"
+                    placeholder="Y"
+                    value={productForm.position.y}
+                    onChange={(e) => setProductForm({
+                      ...productForm, 
+                      position: {...productForm.position, y: parseFloat(e.target.value) || 0}
+                    })}
+                  />
+                  <input 
+                    type="number"
+                    placeholder="Z"
+                    value={productForm.position.z}
+                    onChange={(e) => setProductForm({
+                      ...productForm, 
+                      position: {...productForm.position, z: parseFloat(e.target.value) || 0}
+                    })}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" onClick={() => {
+                  setShowProductModal(false);
+                  setEditingProduct(null);
+                  setProductForm({
+                    name: '', description: '', price: '', category: '',
+                    position: { x: 0, y: 0, z: 0 },
+                    rotation: { x: 0, y: 0, z: 0 },
+                    scale: { x: 1, y: 1, z: 1 }
+                  });
+                }}>
+                  Anulo
                 </button>
-                <button 
-                  onClick={() => setGeneratedContent('')}
-                  className="flex-1 bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700"
-                >
-                  🗑️ Pastro
+                <button type="submit" className="btn-primary">
+                  {editingProduct ? 'Ruaj Ndryshimet' : 'Krijo Produktin'}
                 </button>
               </div>
-            </div>
-          ) : (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-              <div className="text-6xl mb-4">🤖</div>
-              <p className="text-gray-600">Plotësoni formularin dhe klikoni "Gjeneroni Përmbajtjen" për të marrë përmbajtje të gjeneruar me AI</p>
-            </div>
-          )}
+            </form>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Ngarko Skedarë për Produktin</h3>
+            
+            <div className="upload-options">
+              <div className="upload-section">
+                <h4>Model 3D:</h4>
+                <input 
+                  type="file"
+                  accept=".gltf,.glb,.obj,.fbx,.dae,.stl"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      const format = file.name.split('.').pop().toLowerCase();
+                      handleFileUpload(showUploadModal, file, '3d', format);
+                    }
+                  }}
+                />
+                <small>Formate: GLTF, GLB, OBJ, FBX, DAE, STL</small>
+              </div>
+
+              <div className="upload-section">
+                <h4>Thumbnail:</h4>
+                <input 
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      handleFileUpload(showUploadModal, file, 'thumbnail');
+                    }
+                  }}
+                />
+                <small>Formate: JPG, PNG, WebP</small>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button onClick={() => setShowUploadModal(null)}>
+                Mbyll
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // Main App Component
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [websites, setWebsites] = useState([]);
-  const [posts, setPosts] = useState([]);
-  const [calendarEvents, setCalendarEvents] = useState([]);
-  const [stats, setStats] = useState(null);
+  const [currentView, setCurrentView] = useState('vr'); // 'vr' or 'admin'
+  const [products, setProducts] = useState([]);
+  const [shopSettings, setShopSettings] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
-  // Load data on mount
   useEffect(() => {
     loadInitialData();
   }, []);
 
   const loadInitialData = async () => {
     try {
-      // Load websites
-      const websitesResponse = await axios.get(`${API}/websites`);
-      setWebsites(websitesResponse.data);
+      // Load products
+      const productsResponse = await axios.get(`${API}/products`);
+      setProducts(productsResponse.data);
 
-      // Load posts
-      const postsResponse = await axios.get(`${API}/posts`);
-      setPosts(postsResponse.data);
+      // Load shop settings
+      const settingsResponse = await axios.get(`${API}/shop-settings`);
+      setShopSettings(settingsResponse.data);
 
-      // Load calendar events
-      const eventsResponse = await axios.get(`${API}/calendar`);
-      setCalendarEvents(eventsResponse.data);
+      // Load categories
+      const categoriesResponse = await axios.get(`${API}/categories`);
+      setCategories(categoriesResponse.data);
 
-      // Load stats
-      const statsResponse = await axios.get(`${API}/stats`);
-      setStats(statsResponse.data);
+      // Load analytics
+      const analyticsResponse = await axios.get(`${API}/analytics`);
+      setAnalytics(analyticsResponse.data);
 
     } catch (error) {
-      console.error('Error loading initial data:', error);
+      console.error('Error loading data:', error);
     }
   };
 
-  const renderContent = () => {
-    switch(activeTab) {
-      case 'dashboard':
-        return <Dashboard stats={stats} />;
-      case 'calendar':
-        return <CalendarView websites={websites} calendarEvents={calendarEvents} setCalendarEvents={setCalendarEvents} />;
-      case 'websites':
-        return <WebsiteManager websites={websites} setWebsites={setWebsites} />;
-      case 'posts':
-        return <PostManager websites={websites} posts={posts} setPosts={setPosts} />;
-      case 'content':
-        return <ContentGenerator websites={websites} />;
-      default:
-        return <Dashboard stats={stats} />;
-    }
+  const handleProductClick = (product) => {
+    setSelectedProduct(product);
   };
 
   return (
-    <div className="App flex min-h-screen bg-gray-100">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} stats={stats} />
-      <div className="flex-1">
-        {renderContent()}
+    <div className="App">
+      {/* Navigation Header */}
+      <div className="app-header">
+        <div className="header-content">
+          <h1>🕶️ {shopSettings?.shop_name || 'Dyqani VR Modern'}</h1>
+          <div className="view-toggle">
+            <button 
+              className={currentView === 'vr' ? 'active' : ''} 
+              onClick={() => setCurrentView('vr')}
+            >
+              Pamja VR
+            </button>
+            <button 
+              className={currentView === 'admin' ? 'active' : ''} 
+              onClick={() => setCurrentView('admin')}
+            >
+              Paneli Admin
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Main Content */}
+      {currentView === 'vr' ? (
+        <VRShop 
+          products={products} 
+          shopSettings={shopSettings}
+          onProductClick={handleProductClick}
+        />
+      ) : (
+        <AdminPanel 
+          products={products}
+          setProducts={setProducts}
+          shopSettings={shopSettings}
+          setShopSettings={setShopSettings}
+          categories={categories}
+          analytics={analytics}
+        />
+      )}
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <div className="modal-overlay" onClick={() => setSelectedProduct(null)}>
+          <div className="modal product-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{selectedProduct.name}</h3>
+            <div className="product-detail">
+              {selectedProduct.thumbnail_url && (
+                <img 
+                  src={`${BACKEND_URL}${selectedProduct.thumbnail_url}`} 
+                  alt={selectedProduct.name} 
+                />
+              )}
+              <div className="product-info">
+                <p><strong>Çmimi:</strong> €{selectedProduct.price}</p>
+                <p><strong>Kategoria:</strong> {selectedProduct.category}</p>
+                <p><strong>Përshkrimi:</strong> {selectedProduct.description}</p>
+                {selectedProduct.model_3d_url && (
+                  <p><strong>Model 3D:</strong> ✅ ({selectedProduct.model_3d_format})</p>
+                )}
+              </div>
+            </div>
+            <button onClick={() => setSelectedProduct(null)}>Mbyll</button>
+          </div>
+        </div>
+      )}
+
+      {/* VR Instructions */}
+      {currentView === 'vr' && (
+        <div className="vr-instructions">
+          <div className="instructions-content">
+            <h4>🎮 Kontrollet:</h4>
+            <p><strong>PC:</strong> WASD ose shigjetat për lëvizje • Mouse për të parë rreth e rrotull</p>
+            <p><strong>Mobile:</strong> Lëvizni telefonin për të parë • Touch për të klikuar</p>
+            <p><strong>VR:</strong> Përdorni kontrollerët për navigim dhe ndërveprim</p>
+            <button onClick={() => document.querySelector('a-scene').enterVR()}>
+              Hyni në VR 🕶️
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
