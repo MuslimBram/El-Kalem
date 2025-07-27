@@ -224,8 +224,15 @@ async def create_calendar_event(event: CalendarEventCreate):
         raise HTTPException(status_code=404, detail="Website not found")
     
     event_dict = event.dict()
+    # Convert date to ISO string for MongoDB storage
+    if isinstance(event_dict['date'], date):
+        event_dict['date'] = event_dict['date'].isoformat()
     event_obj = CalendarEvent(**event_dict)
-    await db.calendar_events.insert_one(event_obj.dict())
+    # Also convert the date in the event_obj for storage
+    event_storage_dict = event_obj.dict()
+    if isinstance(event_storage_dict['date'], date):
+        event_storage_dict['date'] = event_storage_dict['date'].isoformat()
+    await db.calendar_events.insert_one(event_storage_dict)
     return event_obj
 
 @api_router.get("/calendar", response_model=List[CalendarEvent])
