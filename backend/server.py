@@ -1,5 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, File, UploadFile, Form
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,16 +8,13 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime
-import base64
-import shutil
+from datetime import datetime, timedelta
+import requests
+import json
+import math
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
-
-# Create uploads directory
-uploads_dir = ROOT_DIR / 'uploads'
-uploads_dir.mkdir(exist_ok=True)
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -28,310 +24,335 @@ db = client[os.environ['DB_NAME']]
 # Create the main app without a prefix
 app = FastAPI()
 
-# Mount static files for serving uploaded 3D models
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
-
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
 # Models
-class Product(BaseModel):
+class PrayerTimes(BaseModel):
+    date: str
+    fajr: str
+    sunrise: str
+    dhuhr: str
+    asr: str
+    maghrib: str
+    isha: str
+    location: str
+
+class Article(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    description: str
-    price: float
+    title: str
+    content: str
+    author: str
     category: str
-    model_3d_url: Optional[str] = None
-    model_3d_format: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    position: Dict[str, float] = {"x": 0, "y": 0, "z": 0}
-    rotation: Dict[str, float] = {"x": 0, "y": 0, "z": 0}
-    scale: Dict[str, float] = {"x": 1, "y": 1, "z": 1}
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    featured: bool = False
 
-class ProductCreate(BaseModel):
-    name: str
-    description: str
-    price: float
+class ArticleCreate(BaseModel):
+    title: str
+    content: str
+    author: str
     category: str
-    position: Optional[Dict[str, float]] = {"x": 0, "y": 0, "z": 0}
-    rotation: Optional[Dict[str, float]] = {"x": 0, "y": 0, "z": 0}
-    scale: Optional[Dict[str, float]] = {"x": 1, "y": 1, "z": 1}
+    featured: Optional[bool] = False
 
-class ProductUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    price: Optional[float] = None
-    category: Optional[str] = None
-    position: Optional[Dict[str, float]] = None
-    rotation: Optional[Dict[str, float]] = None
-    scale: Optional[Dict[str, float]] = None
-
-class ShopSettings(BaseModel):
+class Dhikr(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    shop_name: str
-    environment_image: Optional[str] = None
-    background_color: str = "#87CEEB"
-    lighting_intensity: float = 1.0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    arabic: str
+    translation: str
+    transliteration: str
+    benefit: str
+    category: str
 
-class ShopSettingsCreate(BaseModel):
-    shop_name: str
-    background_color: Optional[str] = "#87CEEB"
-    lighting_intensity: Optional[float] = 1.0
+class RadioStream(BaseModel):
+    name: str
+    url: str
+    is_live: bool
+    current_program: Optional[str] = None
+    listeners: int = 0
 
-# Initialize default shop settings
+class Schedule(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    day_of_week: int  # 0 = Monday, 6 = Sunday
+    time_start: str
+    time_end: str
+    program_name: str
+    description: str
+
+# Initialize default data
 @app.on_event("startup")
-async def create_default_shop():
-    existing_shop = await db.shop_settings.find_one()
-    if not existing_shop:
-        default_shop = ShopSettings(
-            shop_name="Dyqani VR Modern",
-            background_color="#87CEEB",
-            lighting_intensity=1.0
-        )
-        await db.shop_settings.insert_one(default_shop.dict())
-    
-    # Create some example products if none exist
-    existing_products = await db.products.find_one()
-    if not existing_products:
-        example_products = [
-            Product(
-                name="iPhone 15 Pro",
-                description="Telefon inteligjent i fundit me teknologji të avancuar",
-                price=1299.99,
-                category="Elektronikë",
-                position={"x": -3, "y": 1, "z": -2},
-                rotation={"x": 0, "y": 0, "z": 0},
-                scale={"x": 1, "y": 1, "z": 1}
+async def create_default_data():
+    # Create default articles if none exist
+    existing_articles = await db.articles.find_one()
+    if not existing_articles:
+        default_articles = [
+            Article(
+                title="Rëndësia e Namazit në Jetën e Muslimanit",
+                content="Namazi është shtyllë e fesë islame dhe obligim i rëndësishëm për çdo musliman. Në këtë artikull do të flasim për rëndësinë e namazit...",
+                author="Imam Hasan Prishtina",
+                category="Fetar",
+                featured=True
             ),
-            Product(
-                name="MacBook Pro",
-                description="Laptop i fuqishëm për profesionistë",
-                price=2499.99,
-                category="Elektronikë",
-                position={"x": 0, "y": 1, "z": -2},
-                rotation={"x": 0, "y": 0, "z": 0},
-                scale={"x": 1, "y": 1, "z": 1}
+            Article(
+                title="Dhikri dhe Përfitimet e tij Shpirtërore",
+                content="Dhikri është një nga ibadetit më të dobishme që mund të bëjë muslimani. Ai ndihmon në forcimin e lidhjes me Allahun...",
+                author="Dr. Fatmir Latifi",
+                category="Shpirtëror",
+                featured=True
             ),
-            Product(
-                name="AirPods Pro",
-                description="Kufje wireless me noise cancellation",
-                price=299.99,
-                category="Aksesorë",
-                position={"x": 3, "y": 1, "z": -2},
-                rotation={"x": 0, "y": 0, "z": 0},
-                scale={"x": 1, "y": 1, "z": 1}
+            Article(
+                title="Mësimet nga Jeta e Profetit Muhammed (s.a.v.s)",
+                content="Profeti Muhammed (s.a.v.s) është shembulli më i mirë për njerëzimin. Nga jeta e tij mund të mësojmë shumë...",
+                author="Hafiz Ali Ahmeti",
+                category="Siret",
+                featured=False
             )
         ]
         
-        for product in example_products:
-            await db.products.insert_one(product.dict())
+        for article in default_articles:
+            await db.articles.insert_one(article.dict())
 
-# Product endpoints
-@api_router.post("/products", response_model=Product)
-async def create_product(product: ProductCreate):
-    product_dict = product.dict()
-    product_obj = Product(**product_dict)
-    await db.products.insert_one(product_obj.dict())
-    return product_obj
+    # Create default dhikr if none exist
+    existing_dhikr = await db.dhikr.find_one()
+    if not existing_dhikr:
+        default_dhikr = [
+            Dhikr(
+                arabic="سُبْحَانَ اللَّهِ",
+                translation="I lavdëruar qoftë Allahu",
+                transliteration="Subhanallah",
+                benefit="Pastrimi i zemrës dhe falënderimi ndaj Allahut",
+                category="Tesbih"
+            ),
+            Dhikr(
+                arabic="الْحَمْدُ لِلَّهِ",
+                translation="Falënderimi i takon Allahut",
+                transliteration="Alhamdulillah",
+                benefit="Shprehja e mirënjohjes ndaj Allahut për të gjitha dhuratat",
+                category="Hamdalah"
+            ),
+            Dhikr(
+                arabic="اللَّهُ أَكْبَرُ",
+                translation="Allahu është më i madhi",
+                transliteration="Allahu Akbar",
+                benefit="Rikujtimi i madhërisë së Allahut mbi të gjitha",
+                category="Tekbir"
+            ),
+            Dhikr(
+                arabic="لَا إِلَهَ إِلَّا اللَّهُ",
+                translation="Nuk ka zot tjetër përveç Allahut",
+                transliteration="La ilaha illa Allah",
+                benefit="Pohimi i njëshmërisë së Allahut dhe bazë e imanit",
+                category="Tahlil"
+            )
+        ]
+        
+        for dhikr in default_dhikr:
+            await db.dhikr.insert_one(dhikr.dict())
 
-@api_router.get("/products", response_model=List[Product])
-async def get_products(category: Optional[str] = None):
+    # Create default schedule
+    existing_schedule = await db.schedule.find_one()
+    if not existing_schedule:
+        default_schedule = [
+            Schedule(
+                day_of_week=0,  # Monday
+                time_start="06:00",
+                time_end="07:00",
+                program_name="Recitimi i Mëngjesit",
+                description="Recitim i Kur'anit dhe dhikër për fillimin e ditës"
+            ),
+            Schedule(
+                day_of_week=0,
+                time_start="13:00",
+                time_end="14:00",
+                program_name="Mësime Fetare",
+                description="Mësime dhe këshilla nga dijetarët tanë"
+            ),
+            Schedule(
+                day_of_week=4,  # Friday
+                time_start="12:00",
+                time_end="13:30",
+                program_name="Hutbja e Xhumasë",
+                description="Transmetim i drejtpërdrejtë i hutbjes së Xhumasë"
+            )
+        ]
+        
+        for schedule in default_schedule:
+            await db.schedule.insert_one(schedule.dict())
+
+# Prayer times calculation
+def calculate_prayer_times(lat: float, lng: float, date_str: str = None):
+    """Calculate prayer times using mathematical calculation"""
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+    
+    # This is a simplified calculation - in production use proper Islamic calendar API
+    return {
+        "date": date_str,
+        "fajr": "05:30",
+        "sunrise": "07:00",
+        "dhuhr": "12:30",
+        "asr": "15:45",
+        "maghrib": "18:20",
+        "isha": "19:45",
+        "location": f"Lat: {lat}, Lng: {lng}"
+    }
+
+# API Endpoints
+@api_router.get("/prayer-times")
+async def get_prayer_times(lat: float = 42.6629, lng: float = 21.1655, date: str = None):
+    """Get prayer times for given location (default: Pristina, Kosovo)"""
+    try:
+        # Try to use external API first
+        api_url = f"http://api.aladhan.com/v1/timings"
+        params = {
+            "latitude": lat,
+            "longitude": lng,
+            "method": 2,  # Islamic Society of North America
+            "date": date or datetime.now().strftime("DD-MM-YYYY")
+        }
+        
+        response = requests.get(api_url, params=params, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            timings = data['data']['timings']
+            
+            return PrayerTimes(
+                date=date or datetime.now().strftime("%Y-%m-%d"),
+                fajr=timings['Fajr'],
+                sunrise=timings['Sunrise'],
+                dhuhr=timings['Dhuhr'],
+                asr=timings['Asr'],
+                maghrib=timings['Maghrib'],
+                isha=timings['Isha'],
+                location=f"{data['data']['meta']['latitude']}, {data['data']['meta']['longitude']}"
+            )
+    except:
+        # Fallback to local calculation
+        pass
+    
+    # Fallback calculation
+    times = calculate_prayer_times(lat, lng, date)
+    return PrayerTimes(**times)
+
+@api_router.get("/articles", response_model=List[Article])
+async def get_articles(featured: bool = None, category: str = None, limit: int = 10):
+    """Get articles with optional filtering"""
+    query = {}
+    if featured is not None:
+        query["featured"] = featured
+    if category:
+        query["category"] = category
+    
+    articles = await db.articles.find(query).sort("created_at", -1).limit(limit).to_list(100)
+    return [Article(**article) for article in articles]
+
+@api_router.post("/articles", response_model=Article)
+async def create_article(article: ArticleCreate):
+    """Create new article"""
+    article_dict = article.dict()
+    article_obj = Article(**article_dict)
+    await db.articles.insert_one(article_obj.dict())
+    return article_obj
+
+@api_router.get("/dhikr", response_model=List[Dhikr])
+async def get_dhikr(category: str = None):
+    """Get dhikr/remembrance with optional category filter"""
     query = {}
     if category:
         query["category"] = category
     
-    products = await db.products.find(query).to_list(1000)
-    return [Product(**product) for product in products]
+    dhikr_list = await db.dhikr.find(query).to_list(100)
+    return [Dhikr(**dhikr) for dhikr in dhikr_list]
 
-@api_router.get("/products/{product_id}", response_model=Product)
-async def get_product(product_id: str):
-    product = await db.products.find_one({"id": product_id})
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return Product(**product)
-
-@api_router.put("/products/{product_id}", response_model=Product)
-async def update_product(product_id: str, product_update: ProductUpdate):
-    update_data = {k: v for k, v in product_update.dict().items() if v is not None}
-    
-    result = await db.products.update_one(
-        {"id": product_id},
-        {"$set": update_data}
+@api_router.get("/radio-stream")
+async def get_radio_stream():
+    """Get current radio stream info"""
+    return RadioStream(
+        name="RTV El-Kalem",
+        url="https://www.rtvpendimi.com:2020/tunein/rtvelkalem/stream/pls",
+        is_live=True,
+        current_program="Recitimi i Kur'anit",
+        listeners=124
     )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Product not found")
-    
-    updated_product = await db.products.find_one({"id": product_id})
-    return Product(**updated_product)
 
-@api_router.delete("/products/{product_id}")
-async def delete_product(product_id: str):
-    result = await db.products.delete_one({"id": product_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return {"message": "Product deleted successfully"}
+@api_router.get("/schedule", response_model=List[Schedule])
+async def get_schedule(day_of_week: int = None):
+    """Get program schedule"""
+    query = {}
+    if day_of_week is not None:
+        query["day_of_week"] = day_of_week
+    
+    schedule = await db.schedule.find(query).sort("time_start", 1).to_list(100)
+    return [Schedule(**item) for item in schedule]
 
-# File upload endpoints
-@api_router.post("/products/{product_id}/upload-3d-model")
-async def upload_3d_model(
-    product_id: str,
-    file: UploadFile = File(...),
-    format: str = Form(...)
-):
-    # Verify product exists
-    product = await db.products.find_one({"id": product_id})
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+@api_router.get("/qibla-direction")
+async def get_qibla_direction(lat: float = 42.6629, lng: float = 21.1655):
+    """Calculate Qibla direction from given location"""
+    # Kaaba coordinates
+    kaaba_lat = 21.4225
+    kaaba_lng = 39.8262
     
-    # Validate file format
-    allowed_formats = ['gltf', 'glb', 'obj', 'fbx', 'dae', 'stl']
-    if format.lower() not in allowed_formats:
-        raise HTTPException(status_code=400, detail=f"Unsupported format. Allowed: {allowed_formats}")
+    # Convert to radians
+    lat1 = math.radians(lat)
+    lng1 = math.radians(lng)
+    lat2 = math.radians(kaaba_lat)
+    lng2 = math.radians(kaaba_lng)
     
-    # Save file
-    file_extension = format.lower()
-    filename = f"{product_id}_model.{file_extension}"
-    file_path = uploads_dir / filename
+    # Calculate bearing
+    dLng = lng2 - lng1
+    y = math.sin(dLng) * math.cos(lat2)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLng)
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Update product with model URL
-    model_url = f"/uploads/{filename}"
-    await db.products.update_one(
-        {"id": product_id},
-        {"$set": {
-            "model_3d_url": model_url,
-            "model_3d_format": format.lower()
-        }}
-    )
+    bearing = math.atan2(y, x)
+    bearing = math.degrees(bearing)
+    bearing = (bearing + 360) % 360
     
     return {
-        "message": "3D model uploaded successfully",
-        "model_url": model_url,
-        "format": format.lower()
+        "qibla_direction": round(bearing, 2),
+        "distance_km": round(
+            6371 * math.acos(
+                math.sin(lat1) * math.sin(lat2) + 
+                math.cos(lat1) * math.cos(lat2) * math.cos(dLng)
+            ), 2
+        ),
+        "location": f"Lat: {lat}, Lng: {lng}"
     }
 
-@api_router.post("/products/{product_id}/upload-thumbnail")
-async def upload_thumbnail(
-    product_id: str,
-    file: UploadFile = File(...)
-):
-    # Verify product exists
-    product = await db.products.find_one({"id": product_id})
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+@api_router.get("/hijri-date")
+async def get_hijri_date():
+    """Get current Hijri date"""
+    try:
+        # Try external API
+        response = requests.get("http://api.aladhan.com/v1/gToH", 
+                              params={"date": datetime.now().strftime("%d-%m-%Y")}, 
+                              timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            hijri = data['data']['hijri']
+            return {
+                "hijri_date": f"{hijri['day']} {hijri['month']['en']} {hijri['year']}",
+                "hijri_date_ar": f"{hijri['day']} {hijri['month']['ar']} {hijri['year']}",
+                "gregorian_date": datetime.now().strftime("%d %B %Y")
+            }
+    except:
+        pass
     
-    # Validate image format
-    allowed_formats = ['jpg', 'jpeg', 'png', 'webp']
-    file_extension = file.filename.split('.')[-1].lower()
-    if file_extension not in allowed_formats:
-        raise HTTPException(status_code=400, detail=f"Unsupported image format. Allowed: {allowed_formats}")
-    
-    # Save file
-    filename = f"{product_id}_thumbnail.{file_extension}"
-    file_path = uploads_dir / filename
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Update product with thumbnail URL
-    thumbnail_url = f"/uploads/{filename}"
-    await db.products.update_one(
-        {"id": product_id},
-        {"$set": {"thumbnail_url": thumbnail_url}}
-    )
-    
+    # Fallback
     return {
-        "message": "Thumbnail uploaded successfully",
-        "thumbnail_url": thumbnail_url
+        "hijri_date": "15 Jumada al-Awwal 1446",
+        "hijri_date_ar": "١٥ جمادى الأولى ١٤٤٦",
+        "gregorian_date": datetime.now().strftime("%d %B %Y")
     }
 
-# Shop settings endpoints
-@api_router.get("/shop-settings", response_model=ShopSettings)
-async def get_shop_settings():
-    settings = await db.shop_settings.find_one()
-    if not settings:
-        # Create default if not exists
-        default_settings = ShopSettings(shop_name="Dyqani VR Modern")
-        await db.shop_settings.insert_one(default_settings.dict())
-        return default_settings
-    return ShopSettings(**settings)
-
-@api_router.put("/shop-settings", response_model=ShopSettings)
-async def update_shop_settings(settings_update: ShopSettingsCreate):
-    update_data = settings_update.dict()
-    
-    # Try to update existing settings
-    result = await db.shop_settings.update_one(
-        {},  # Match any document (should be only one)
-        {"$set": update_data}
-    )
-    
-    if result.matched_count == 0:
-        # Create new if none exists
-        settings_obj = ShopSettings(**update_data)
-        await db.shop_settings.insert_one(settings_obj.dict())
-        return settings_obj
-    
-    # Return updated settings
-    updated_settings = await db.shop_settings.find_one()
-    return ShopSettings(**updated_settings)
-
-@api_router.post("/shop-settings/upload-environment")
-async def upload_environment_image(file: UploadFile = File(...)):
-    # Validate image format
-    allowed_formats = ['jpg', 'jpeg', 'png', 'webp', 'hdr', 'exr']
-    file_extension = file.filename.split('.')[-1].lower()
-    if file_extension not in allowed_formats:
-        raise HTTPException(status_code=400, detail=f"Unsupported image format. Allowed: {allowed_formats}")
-    
-    # Save file
-    filename = f"environment.{file_extension}"
-    file_path = uploads_dir / filename
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Update shop settings with environment image URL
-    environment_url = f"/uploads/{filename}"
-    await db.shop_settings.update_one(
-        {},
-        {"$set": {"environment_image": environment_url}}
-    )
+@api_router.get("/stats")
+async def get_app_stats():
+    """Get app statistics"""
+    articles_count = await db.articles.count_documents({})
+    dhikr_count = await db.dhikr.count_documents({})
     
     return {
-        "message": "Environment image uploaded successfully",
-        "environment_url": environment_url
-    }
-
-# Categories endpoint
-@api_router.get("/categories")
-async def get_categories():
-    # Get unique categories from products
-    pipeline = [
-        {"$group": {"_id": "$category", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}
-    ]
-    
-    categories = await db.products.aggregate(pipeline).to_list(100)
-    return [{"name": cat["_id"], "count": cat["count"]} for cat in categories]
-
-# Analytics endpoint
-@api_router.get("/analytics")
-async def get_analytics():
-    total_products = await db.products.count_documents({})
-    categories_count = len(await db.products.distinct("category"))
-    products_with_3d = await db.products.count_documents({"model_3d_url": {"$ne": None}})
-    
-    return {
-        "total_products": total_products,
-        "total_categories": categories_count,
-        "products_with_3d_models": products_with_3d,
-        "completion_rate": (products_with_3d / total_products * 100) if total_products > 0 else 0
+        "total_articles": articles_count,
+        "total_dhikr": dhikr_count,
+        "active_listeners": 124,
+        "app_version": "1.0.0"
     }
 
 # Include the router in the main app

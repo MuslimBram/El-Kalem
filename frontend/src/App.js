@@ -1,787 +1,694 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./App.css";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Import A-Frame components (loaded via script tags in public/index.html)
-const VRShop = ({ products, shopSettings, onProductClick }) => {
+// Audio player component
+const AudioPlayer = ({ streamUrl, isPlaying, onPlayPause, currentProgram }) => {
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.play().catch(() => {
+          console.log("Autoplay blocked by browser");
+        });
+      } else {
+        audioRef.current.pause();
+      }
+    }
+  }, [isPlaying]);
+
   return (
-    <div id="vr-container">
-      <a-scene 
-        embedded 
-        style={{width: '100%', height: '100vh'}}
-        vr-mode-ui="enabled: true"
-        device-orientation-permission-ui="enabled: true"
-        loading-screen="dotsColor: white; backgroundColor: #1a1a2e"
-        background={`color: ${shopSettings?.background_color || '#87CEEB'}`}
-        fog="type: linear; color: #74b9ff; near: 0; far: 50"
-      >
-        {/* Assets */}
-        <a-assets>
-          {/* Fonts */}
-          <a-asset-item id="roboto-font" src="https://cdn.aframe.io/fonts/Roboto-msdf.json"></a-asset-item>
-          
-          {/* Materials */}
-          <a-mixin id="floor" 
-            geometry="primitive: box; width: 20; height: 0.1; depth: 20"
-            material="color: #f8f9fa; roughness: 0.1; metalness: 0.1"
-          ></a-mixin>
-          
-          <a-mixin id="wall"
-            geometry="primitive: box; width: 20; height: 6; depth: 0.2"
-            material="color: #ffffff; roughness: 0.3"
-          ></a-mixin>
-
-          <a-mixin id="pillar"
-            geometry="primitive: cylinder; height: 6; radius: 0.3"
-            material="color: #e9ecef; roughness: 0.2; metalness: 0.3"
-          ></a-mixin>
-        </a-assets>
-
-        {/* Lighting */}
-        <a-light type="ambient" color="#404040" intensity={shopSettings?.lighting_intensity || 1.0}></a-light>
-        <a-light type="directional" position="5 10 5" color="#ffffff" intensity="0.8" 
-          light="castShadow: true"
-        ></a-light>
-        <a-light type="point" position="-5 5 -5" color="#74b9ff" intensity="0.3"></a-light>
-        <a-light type="point" position="5 5 5" color="#fd79a8" intensity="0.2"></a-light>
-
-        {/* Shop Environment */}
-        {/* Floor */}
-        <a-entity mixin="floor" position="0 0 0" shadow="receive: true"></a-entity>
+    <div className="audio-player">
+      <audio ref={audioRef} src={streamUrl} preload="none" />
+      
+      <div className="player-info">
+        <div className="station-name">RTV El-Kalem</div>
+        <div className="current-program">{currentProgram || "Radio Islam në Shqip"}</div>
+      </div>
+      
+      <div className="player-controls">
+        <button 
+          className={`play-btn ${isPlaying ? 'playing' : ''}`}
+          onClick={onPlayPause}
+        >
+          {isPlaying ? '⏸️' : '▶️'}
+        </button>
         
-        {/* Walls */}
-        <a-entity mixin="wall" position="0 3 -10" shadow="receive: true"></a-entity>
-        <a-entity mixin="wall" position="0 3 10" shadow="receive: true"></a-entity>
-        <a-entity mixin="wall" position="-10 3 0" rotation="0 90 0" shadow="receive: true"></a-entity>
-        <a-entity mixin="wall" position="10 3 0" rotation="0 90 0" shadow="receive: true"></a-entity>
-
-        {/* Ceiling */}
-        <a-box 
-          position="0 6 0" 
-          width="20" 
-          height="0.1" 
-          depth="20"
-          material="color: #ffffff; roughness: 0.1"
-          shadow="receive: true"
-        ></a-box>
-
-        {/* Pillars */}
-        <a-entity mixin="pillar" position="-7 3 -7" shadow="cast: true; receive: true"></a-entity>
-        <a-entity mixin="pillar" position="7 3 -7" shadow="cast: true; receive: true"></a-entity>
-        <a-entity mixin="pillar" position="-7 3 7" shadow="cast: true; receive: true"></a-entity>
-        <a-entity mixin="pillar" position="7 3 7" shadow="cast: true; receive: true"></a-entity>
-
-        {/* Welcome Sign */}
-        <a-text 
-          position="0 4 -9.5"
-          value={`Mirë se vini në ${shopSettings?.shop_name || 'Dyqani VR Modern'}`}
-          color="#2d3436"
-          font="roboto-font"
-          width="20"
-          align="center"
-          shadow="cast: true"
-        ></a-text>
-
-        {/* Products */}
-        {products.map((product, index) => (
-          <a-entity key={product.id} position={`${product.position.x} ${product.position.y} ${product.position.z}`}>
-            {/* Product Display Platform */}
-            <a-cylinder 
-              position="0 0.05 0"
-              radius="0.8" 
-              height="0.1"
-              material="color: #ffffff; roughness: 0.1; metalness: 0.8"
-              shadow="cast: true; receive: true"
-            ></a-cylinder>
-
-            {/* Product 3D Model or Placeholder */}
-            {product.model_3d_url ? (
-              <a-entity
-                gltf-model={`${BACKEND_URL}${product.model_3d_url}`}
-                position="0 0.5 0"
-                rotation={`${product.rotation.x} ${product.rotation.y} ${product.rotation.z}`}
-                scale={`${product.scale.x} ${product.scale.y} ${product.scale.z}`}
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 10000"
-                class="product-model"
-                shadow="cast: true"
-                onClick={() => onProductClick && onProductClick(product)}
-              ></a-entity>
-            ) : (
-              // Placeholder box
-              <a-box 
-                position="0 0.5 0"
-                width="0.8" 
-                height="0.8" 
-                depth="0.8"
-                material="color: #74b9ff; roughness: 0.3; metalness: 0.2"
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 8000"
-                class="product-placeholder"
-                shadow="cast: true"
-                onClick={() => onProductClick && onProductClick(product)}
-              ></a-box>
-            )}
-
-            {/* Product Info Panel */}
-            <a-plane 
-              position="0 1.8 0"
-              width="2" 
-              height="1"
-              material="color: rgba(255, 255, 255, 0.9); transparent: true"
-              geometry="primitive: plane"
-              shadow="cast: true"
-              look-at="#camera"
-            >
-              <a-text 
-                position="0 0.3 0.01"
-                value={product.name}
-                color="#2d3436"
-                font="roboto-font"
-                width="8"
-                align="center"
-                wrap-count="20"
-              ></a-text>
-              <a-text 
-                position="0 0 0.01"
-                value={`€${product.price}`}
-                color="#e17055"
-                font="roboto-font"
-                width="6"
-                align="center"
-              ></a-text>
-              <a-text 
-                position="0 -0.3 0.01"
-                value={product.category}
-                color="#636e72"
-                font="roboto-font"
-                width="4"
-                align="center"
-              ></a-text>
-            </a-plane>
-          </a-entity>
-        ))}
-
-        {/* Navigation Instructions */}
-        <a-text 
-          position="0 0.2 5"
-          value="Përdorni WASD ose shigjetat për të lëvizur • Klikoni produktet për detaje"
-          color="#636e72"
-          font="roboto-font"
-          width="8"
-          align="center"
-        ></a-text>
-
-        {/* Camera with controls */}
-        <a-entity id="rig" position="0 1.6 8">
-          <a-camera 
-            id="camera"
-            cursor="rayOrigin: mouse"
-            raycaster="objects: .product-model, .product-placeholder"
-            look-controls="pointerLockEnabled: true"
-            wasd-controls="acceleration: 20"
-          >
-            <a-cursor 
-              geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
-              material="color: #74b9ff; shader: flat"
-              animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
-              animation__fusing="property: scale; startEvents: fusing; from: 1 1 1; to: 0.1 0.1 0.1; dur: 1500"
-            ></a-cursor>
-          </a-camera>
-        </a-entity>
-
-        {/* VR Controllers (for VR headsets) */}
-        <a-entity 
-          id="leftController" 
-          hand-controls="hand: left"
-          laser-controls="hand: left"
-          raycaster="objects: .product-model, .product-placeholder"
-        ></a-entity>
-        <a-entity 
-          id="rightController" 
-          hand-controls="hand: right"
-          laser-controls="hand: right"
-          raycaster="objects: .product-model, .product-placeholder"
-        ></a-entity>
-      </a-scene>
+        <div className="live-indicator">
+          <span className="live-dot"></span>
+          LIVE
+        </div>
+      </div>
+      
+      <div className="volume-control">
+        <span>🔊</span>
+      </div>
     </div>
   );
 };
 
-const AdminPanel = ({ 
-  products, 
-  setProducts, 
-  shopSettings, 
-  setShopSettings, 
-  categories,
-  analytics 
-}) => {
-  const [activeTab, setActiveTab] = useState('products');
-  const [showProductModal, setShowProductModal] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [showUploadModal, setShowUploadModal] = useState(null);
-  
-  const [productForm, setProductForm] = useState({
-    name: '',
-    description: '',
-    price: '',
-    category: '',
-    position: { x: 0, y: 0, z: 0 },
-    rotation: { x: 0, y: 0, z: 0 },
-    scale: { x: 1, y: 1, z: 1 }
-  });
-
-  const [shopForm, setShopForm] = useState({
-    shop_name: '',
-    background_color: '#87CEEB',
-    lighting_intensity: 1.0
-  });
+// Prayer times component
+const PrayerTimes = () => {
+  const [prayerTimes, setPrayerTimes] = useState(null);
+  const [nextPrayer, setNextPrayer] = useState(null);
 
   useEffect(() => {
-    if (shopSettings) {
-      setShopForm({
-        shop_name: shopSettings.shop_name || '',
-        background_color: shopSettings.background_color || '#87CEEB',
-        lighting_intensity: shopSettings.lighting_intensity || 1.0
-      });
-    }
-  }, [shopSettings]);
+    fetchPrayerTimes();
+    const interval = setInterval(updateNextPrayer, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
 
-  const handleProductSubmit = async (e) => {
-    e.preventDefault();
+  const fetchPrayerTimes = async () => {
     try {
-      const productData = {
-        ...productForm,
-        price: parseFloat(productForm.price)
-      };
-
-      let response;
-      if (editingProduct) {
-        response = await axios.put(`${API}/products/${editingProduct.id}`, productData);
-        setProducts(products.map(p => p.id === editingProduct.id ? response.data : p));
+      // Get user location
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            const response = await axios.get(`${API}/prayer-times?lat=${latitude}&lng=${longitude}`);
+            setPrayerTimes(response.data);
+            updateNextPrayer(response.data);
+          },
+          async () => {
+            // Fallback to default location (Pristina)
+            const response = await axios.get(`${API}/prayer-times`);
+            setPrayerTimes(response.data);
+            updateNextPrayer(response.data);
+          }
+        );
       } else {
-        response = await axios.post(`${API}/products`, productData);
-        setProducts([...products, response.data]);
+        const response = await axios.get(`${API}/prayer-times`);
+        setPrayerTimes(response.data);
+        updateNextPrayer(response.data);
       }
-
-      setProductForm({
-        name: '', description: '', price: '', category: '',
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        scale: { x: 1, y: 1, z: 1 }
-      });
-      setEditingProduct(null);
-      setShowProductModal(false);
     } catch (error) {
-      console.error('Error saving product:', error);
+      console.error('Error fetching prayer times:', error);
     }
   };
 
-  const handleDeleteProduct = async (productId) => {
-    if (window.confirm('Jeni i sigurt që doni ta fshini këtë produkt?')) {
-      try {
-        await axios.delete(`${API}/products/${productId}`);
-        setProducts(products.filter(p => p.id !== productId));
-      } catch (error) {
-        console.error('Error deleting product:', error);
+  const updateNextPrayer = (times = prayerTimes) => {
+    if (!times) return;
+    
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    
+    const prayers = [
+      { name: 'Sabahu', time: times.fajr, arabic: 'الفجر' },
+      { name: 'Dielli', time: times.sunrise, arabic: 'الشروق' },
+      { name: 'Dreka', time: times.dhuhr, arabic: 'الظهر' },
+      { name: 'Ikindia', time: times.asr, arabic: 'العصر' },
+      { name: 'Akshami', time: times.maghrib, arabic: 'المغرب' },
+      { name: 'Jacia', time: times.isha, arabic: 'العشاء' }
+    ];
+
+    for (let prayer of prayers) {
+      const [hours, minutes] = prayer.time.split(':').map(Number);
+      const prayerTime = hours * 60 + minutes;
+      
+      if (prayerTime > currentTime) {
+        const remainingMinutes = prayerTime - currentTime;
+        const remainingHours = Math.floor(remainingMinutes / 60);
+        const remainingMins = remainingMinutes % 60;
+        
+        setNextPrayer({
+          ...prayer,
+          remaining: `${remainingHours}:${remainingMins.toString().padStart(2, '0')}`
+        });
+        return;
       }
     }
-  };
-
-  const handleEditProduct = (product) => {
-    setEditingProduct(product);
-    setProductForm({
-      name: product.name,
-      description: product.description,
-      price: product.price.toString(),
-      category: product.category,
-      position: product.position,
-      rotation: product.rotation,
-      scale: product.scale
+    
+    // If no prayer found for today, set first prayer for tomorrow
+    setNextPrayer({
+      ...prayers[0],
+      remaining: "Nesër"
     });
-    setShowProductModal(true);
   };
 
-  const handleFileUpload = async (productId, file, type, format = null) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (format) formData.append('format', format);
-
-    try {
-      const endpoint = type === '3d' ? 
-        `${API}/products/${productId}/upload-3d-model` :
-        `${API}/products/${productId}/upload-thumbnail`;
-      
-      const response = await axios.post(endpoint, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      // Reload products to show updated URLs
-      const productsResponse = await axios.get(`${API}/products`);
-      setProducts(productsResponse.data);
-      
-      setShowUploadModal(null);
-      alert('Skedari u ngarkua me sukses!');
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      alert('Gabim gjatë ngarkimit të skedarit');
-    }
-  };
-
-  const handleShopSettingsSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.put(`${API}/shop-settings`, shopForm);
-      setShopSettings(response.data);
-      alert('Konfigurimi u ruajt me sukses!');
-    } catch (error) {
-      console.error('Error updating shop settings:', error);
-    }
-  };
+  if (!prayerTimes) {
+    return (
+      <div className="prayer-times loading">
+        <div className="loading-spinner">🕌</div>
+        <p>Duke ngarkuar orët e namazit...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="admin-panel">
-      {/* Tab Navigation */}
-      <div className="tab-nav">
-        <button 
-          className={activeTab === 'products' ? 'active' : ''} 
-          onClick={() => setActiveTab('products')}
+    <div className="prayer-times">
+      <div className="prayer-header">
+        <h3>🕌 Orët e Namazit</h3>
+        <div className="hijri-date">📅 {prayerTimes.date}</div>
+      </div>
+      
+      {nextPrayer && (
+        <div className="next-prayer">
+          <div className="next-prayer-name">
+            {nextPrayer.name} <span className="arabic">{nextPrayer.arabic}</span>
+          </div>
+          <div className="next-prayer-time">{nextPrayer.time}</div>
+          <div className="next-prayer-remaining">
+            {nextPrayer.remaining !== "Nesër" ? `${nextPrayer.remaining} mbetur` : nextPrayer.remaining}
+          </div>
+        </div>
+      )}
+      
+      <div className="prayer-grid">
+        <div className="prayer-time">
+          <span className="prayer-name">Sabahu</span>
+          <span className="time">{prayerTimes.fajr}</span>
+        </div>
+        <div className="prayer-time">
+          <span className="prayer-name">Dielli</span>
+          <span className="time">{prayerTimes.sunrise}</span>
+        </div>
+        <div className="prayer-time">
+          <span className="prayer-name">Dreka</span>
+          <span className="time">{prayerTimes.dhuhr}</span>
+        </div>
+        <div className="prayer-time">
+          <span className="prayer-name">Ikindia</span>
+          <span className="time">{prayerTimes.asr}</span>
+        </div>
+        <div className="prayer-time">
+          <span className="prayer-name">Akshami</span>
+          <span className="time">{prayerTimes.maghrib}</span>
+        </div>
+        <div className="prayer-time">
+          <span className="prayer-name">Jacia</span>
+          <span className="time">{prayerTimes.isha}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Qibla Compass Component
+const QiblaCompass = () => {
+  const [qiblaDirection, setQiblaDirection] = useState(null);
+  const [deviceHeading, setDeviceHeading] = useState(0);
+  const [permission, setPermission] = useState(null);
+
+  useEffect(() => {
+    fetchQiblaDirection();
+    requestOrientationPermission();
+  }, []);
+
+  const fetchQiblaDirection = async () => {
+    try {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            const response = await axios.get(`${API}/qibla-direction?lat=${latitude}&lng=${longitude}`);
+            setQiblaDirection(response.data);
+          },
+          async () => {
+            const response = await axios.get(`${API}/qibla-direction`);
+            setQiblaDirection(response.data);
+          }
+        );
+      }
+    } catch (error) {
+      console.error('Error fetching qibla direction:', error);
+    }
+  };
+
+  const requestOrientationPermission = async () => {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const response = await DeviceOrientationEvent.requestPermission();
+        setPermission(response);
+        if (response === 'granted') {
+          startCompass();
+        }
+      } catch (error) {
+        console.error('Error requesting orientation permission:', error);
+      }
+    } else {
+      startCompass();
+    }
+  };
+
+  const startCompass = () => {
+    if (window.DeviceOrientationEvent) {
+      window.addEventListener('deviceorientation', handleOrientation);
+    }
+  };
+
+  const handleOrientation = (event) => {
+    let heading = event.alpha;
+    if (heading !== null) {
+      setDeviceHeading(360 - heading);
+    }
+  };
+
+  if (!qiblaDirection) {
+    return (
+      <div className="qibla-compass loading">
+        <div className="loading-spinner">🧭</div>
+        <p>Duke ngarkuar drejtimin e Kiblës...</p>
+      </div>
+    );
+  }
+
+  const qiblaAngle = qiblaDirection.qibla_direction - deviceHeading;
+
+  return (
+    <div className="qibla-compass">
+      <div className="compass-header">
+        <h3>🧭 Drejtimi i Kiblës</h3>
+        <div className="distance">📍 {qiblaDirection.distance_km} km</div>
+      </div>
+      
+      <div className="compass-container">
+        <div className="compass-face">
+          <div 
+            className="compass-needle"
+            style={{ transform: `rotate(${qiblaAngle}deg)` }}
+          >
+            <div className="needle-point">🕋</div>
+          </div>
+          
+          <div className="compass-directions">
+            <div className="direction north">V</div>
+            <div className="direction east">L</div>
+            <div className="direction south">J</div>
+            <div className="direction west">P</div>
+          </div>
+          
+          <div className="compass-center"></div>
+        </div>
+        
+        <div className="compass-info">
+          <div className="qibla-degree">{Math.round(qiblaDirection.qibla_direction)}°</div>
+          <div className="compass-instruction">
+            Drejtoni telefonin deri sa shigja të tregojë 🕋
+          </div>
+        </div>
+      </div>
+      
+      {permission === 'denied' && (
+        <div className="permission-warning">
+          Lejoni aksesi për orientim për një kompas më preciz
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Dhikr Counter Component
+const DhikrCounter = () => {
+  const [dhikrList, setDhikrList] = useState([]);
+  const [selectedDhikr, setSelectedDhikr] = useState(null);
+  const [count, setCount] = useState(0);
+  const [targetCount, setTargetCount] = useState(33);
+
+  useEffect(() => {
+    fetchDhikr();
+  }, []);
+
+  const fetchDhikr = async () => {
+    try {
+      const response = await axios.get(`${API}/dhikr`);
+      setDhikrList(response.data);
+      if (response.data.length > 0) {
+        setSelectedDhikr(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching dhikr:', error);
+    }
+  };
+
+  const incrementCount = () => {
+    setCount(prevCount => prevCount + 1);
+    
+    // Haptic feedback on mobile
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+  };
+
+  const resetCount = () => {
+    setCount(0);
+  };
+
+  const isComplete = count >= targetCount;
+
+  return (
+    <div className="dhikr-counter">
+      <div className="dhikr-header">
+        <h3>📿 Numëruesi i Dhikrit</h3>
+        <select 
+          value={selectedDhikr?.id || ''} 
+          onChange={(e) => {
+            const dhikr = dhikrList.find(d => d.id === e.target.value);
+            setSelectedDhikr(dhikr);
+            setCount(0);
+          }}
+          className="dhikr-selector"
         >
-          Produktet ({products.length})
-        </button>
-        <button 
-          className={activeTab === 'settings' ? 'active' : ''} 
-          onClick={() => setActiveTab('settings')}
-        >
-          Konfigurimi
-        </button>
-        <button 
-          className={activeTab === 'analytics' ? 'active' : ''} 
-          onClick={() => setActiveTab('analytics')}
-        >
-          Statistikat
-        </button>
+          {dhikrList.map(dhikr => (
+            <option key={dhikr.id} value={dhikr.id}>
+              {dhikr.transliteration}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Products Tab */}
-      {activeTab === 'products' && (
-        <div className="tab-content">
-          <div className="tab-header">
-            <h2>Menaxhimi i Produkteve</h2>
-            <button className="btn-primary" onClick={() => setShowProductModal(true)}>
-              + Shto Produkt
+      {selectedDhikr && (
+        <div className="dhikr-content">
+          <div className="dhikr-text">
+            <div className="arabic">{selectedDhikr.arabic}</div>
+            <div className="transliteration">{selectedDhikr.transliteration}</div>
+            <div className="translation">{selectedDhikr.translation}</div>
+          </div>
+
+          <div className="counter-display">
+            <div className={`count-circle ${isComplete ? 'complete' : ''}`}>
+              <div className="count-number">{count}</div>
+              <div className="count-target">/ {targetCount}</div>
+            </div>
+          </div>
+
+          <div className="counter-controls">
+            <button className="count-btn" onClick={incrementCount}>
+              {isComplete ? '✅ Përfunduar' : '📿 Numëro'}
             </button>
+            
+            <div className="counter-actions">
+              <button onClick={resetCount} className="reset-btn">🔄 Rivendose</button>
+              <select 
+                value={targetCount} 
+                onChange={(e) => setTargetCount(Number(e.target.value))}
+                className="target-selector"
+              >
+                <option value={33}>33 herë</option>
+                <option value={99}>99 herë</option>
+                <option value={100}>100 herë</option>
+                <option value={1000}>1000 herë</option>
+              </select>
+            </div>
           </div>
 
-          <div className="products-grid">
-            {products.map(product => (
-              <div key={product.id} className="product-card">
-                <div className="product-image">
-                  {product.thumbnail_url ? (
-                    <img src={`${BACKEND_URL}${product.thumbnail_url}`} alt={product.name} />
-                  ) : (
-                    <div className="placeholder-image">📦</div>
-                  )}
-                </div>
-                
-                <div className="product-info">
-                  <h3>{product.name}</h3>
-                  <p className="category">{product.category}</p>
-                  <p className="price">€{product.price}</p>
-                  <p className="description">{product.description}</p>
-                  
-                  <div className="model-status">
-                    {product.model_3d_url ? (
-                      <span className="has-model">✅ Ka model 3D ({product.model_3d_format})</span>
-                    ) : (
-                      <span className="no-model">❌ Nuk ka model 3D</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="product-actions">
-                  <button 
-                    className="btn-edit" 
-                    onClick={() => handleEditProduct(product)}
-                  >
-                    Modifiko
-                  </button>
-                  <button 
-                    className="btn-upload" 
-                    onClick={() => setShowUploadModal(product.id)}
-                  >
-                    Ngarko Skedar
-                  </button>
-                  <button 
-                    className="btn-delete" 
-                    onClick={() => handleDeleteProduct(product.id)}
-                  >
-                    Fshi
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="dhikr-benefit">
+            <strong>Përfitimi:</strong> {selectedDhikr.benefit}
           </div>
         </div>
       )}
+    </div>
+  );
+};
 
-      {/* Settings Tab */}
-      {activeTab === 'settings' && (
-        <div className="tab-content">
-          <h2>Konfigurimi i Dyqanit</h2>
-          
-          <form onSubmit={handleShopSettingsSubmit} className="settings-form">
-            <div className="form-group">
-              <label>Emri i Dyqanit:</label>
-              <input 
-                type="text"
-                value={shopForm.shop_name}
-                onChange={(e) => setShopForm({...shopForm, shop_name: e.target.value})}
-                required
-              />
-            </div>
+// Articles Component
+const Articles = () => {
+  const [articles, setArticles] = useState([]);
+  const [selectedArticle, setSelectedArticle] = useState(null);
 
-            <div className="form-group">
-              <label>Ngjyra e Sfondit:</label>
-              <input 
-                type="color"
-                value={shopForm.background_color}
-                onChange={(e) => setShopForm({...shopForm, background_color: e.target.value})}
-              />
-            </div>
+  useEffect(() => {
+    fetchArticles();
+  }, []);
 
-            <div className="form-group">
-              <label>Intensiteti i Dritës:</label>
-              <input 
-                type="range"
-                min="0.1"
-                max="2"
-                step="0.1"
-                value={shopForm.lighting_intensity}
-                onChange={(e) => setShopForm({...shopForm, lighting_intensity: parseFloat(e.target.value)})}
-              />
-              <span>{shopForm.lighting_intensity}</span>
-            </div>
+  const fetchArticles = async () => {
+    try {
+      const response = await axios.get(`${API}/articles?limit=20`);
+      setArticles(response.data);
+    } catch (error) {
+      console.error('Error fetching articles:', error);
+    }
+  };
 
-            <button type="submit" className="btn-primary">Ruaj Konfigurimin</button>
-          </form>
-        </div>
-      )}
-
-      {/* Analytics Tab */}
-      {activeTab === 'analytics' && (
-        <div className="tab-content">
-          <h2>Statistikat e Dyqanit</h2>
-          
-          <div className="analytics-cards">
-            <div className="analytics-card">
-              <h3>Produktet Totale</h3>
-              <div className="big-number">{analytics?.total_products || 0}</div>
-            </div>
-            
-            <div className="analytics-card">
-              <h3>Kategoritë</h3>
-              <div className="big-number">{analytics?.total_categories || 0}</div>
-            </div>
-            
-            <div className="analytics-card">
-              <h3>Me Modele 3D</h3>
-              <div className="big-number">{analytics?.products_with_3d_models || 0}</div>
-            </div>
-            
-            <div className="analytics-card">
-              <h3>Përqindja e Plotësuar</h3>
-              <div className="big-number">{Math.round(analytics?.completion_rate || 0)}%</div>
-            </div>
-          </div>
-
-          <div className="categories-list">
-            <h3>Kategoritë</h3>
-            {categories?.map(cat => (
-              <div key={cat.name} className="category-item">
-                <span>{cat.name}</span>
-                <span>{cat.count} produkte</span>
-              </div>
-            ))}
+  if (selectedArticle) {
+    return (
+      <div className="article-view">
+        <div className="article-header">
+          <button 
+            className="back-btn" 
+            onClick={() => setSelectedArticle(null)}
+          >
+            ← Kthehu
+          </button>
+          <div className="article-meta">
+            <span className="category">{selectedArticle.category}</span>
+            <span className="author">nga {selectedArticle.author}</span>
           </div>
         </div>
-      )}
 
-      {/* Product Modal */}
-      {showProductModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>{editingProduct ? 'Modifiko Produktin' : 'Shto Produkt të Ri'}</h3>
-            
-            <form onSubmit={handleProductSubmit}>
-              <div className="form-group">
-                <label>Emri:</label>
-                <input 
-                  type="text"
-                  value={productForm.name}
-                  onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Përshkrimi:</label>
-                <textarea 
-                  value={productForm.description}
-                  onChange={(e) => setProductForm({...productForm, description: e.target.value})}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Çmimi (€):</label>
-                <input 
-                  type="number"
-                  step="0.01"
-                  value={productForm.price}
-                  onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Kategoria:</label>
-                <input 
-                  type="text"
-                  value={productForm.category}
-                  onChange={(e) => setProductForm({...productForm, category: e.target.value})}
-                  required
-                />
-              </div>
-
-              <div className="position-controls">
-                <h4>Pozicioni në VR (X, Y, Z):</h4>
-                <div className="xyz-inputs">
-                  <input 
-                    type="number"
-                    placeholder="X"
-                    value={productForm.position.x}
-                    onChange={(e) => setProductForm({
-                      ...productForm, 
-                      position: {...productForm.position, x: parseFloat(e.target.value) || 0}
-                    })}
-                  />
-                  <input 
-                    type="number"
-                    placeholder="Y"
-                    value={productForm.position.y}
-                    onChange={(e) => setProductForm({
-                      ...productForm, 
-                      position: {...productForm.position, y: parseFloat(e.target.value) || 0}
-                    })}
-                  />
-                  <input 
-                    type="number"
-                    placeholder="Z"
-                    value={productForm.position.z}
-                    onChange={(e) => setProductForm({
-                      ...productForm, 
-                      position: {...productForm.position, z: parseFloat(e.target.value) || 0}
-                    })}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-actions">
-                <button type="button" onClick={() => {
-                  setShowProductModal(false);
-                  setEditingProduct(null);
-                  setProductForm({
-                    name: '', description: '', price: '', category: '',
-                    position: { x: 0, y: 0, z: 0 },
-                    rotation: { x: 0, y: 0, z: 0 },
-                    scale: { x: 1, y: 1, z: 1 }
-                  });
-                }}>
-                  Anulo
-                </button>
-                <button type="submit" className="btn-primary">
-                  {editingProduct ? 'Ruaj Ndryshimet' : 'Krijo Produktin'}
-                </button>
-              </div>
-            </form>
+        <div className="article-content">
+          <h1>{selectedArticle.title}</h1>
+          <div className="article-body">
+            <p>{selectedArticle.content}</p>
+          </div>
+          <div className="article-date">
+            {new Date(selectedArticle.created_at).toLocaleDateString('sq-AL')}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Ngarko Skedarë për Produktin</h3>
+  return (
+    <div className="articles">
+      <div className="articles-header">
+        <h3>📚 Artikuj Edukativë</h3>
+      </div>
+
+      <div className="articles-list">
+        {articles.map(article => (
+          <div 
+            key={article.id} 
+            className={`article-card ${article.featured ? 'featured' : ''}`}
+            onClick={() => setSelectedArticle(article)}
+          >
+            {article.featured && <div className="featured-badge">⭐ I veçantë</div>}
             
-            <div className="upload-options">
-              <div className="upload-section">
-                <h4>Model 3D:</h4>
-                <input 
-                  type="file"
-                  accept=".gltf,.glb,.obj,.fbx,.dae,.stl"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      const format = file.name.split('.').pop().toLowerCase();
-                      handleFileUpload(showUploadModal, file, '3d', format);
-                    }
-                  }}
-                />
-                <small>Formate: GLTF, GLB, OBJ, FBX, DAE, STL</small>
+            <div className="article-info">
+              <h4>{article.title}</h4>
+              <p className="article-excerpt">
+                {article.content.substring(0, 100)}...
+              </p>
+              <div className="article-meta">
+                <span className="category">{article.category}</span>
+                <span className="author">{article.author}</span>
               </div>
-
-              <div className="upload-section">
-                <h4>Thumbnail:</h4>
-                <input 
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      handleFileUpload(showUploadModal, file, 'thumbnail');
-                    }
-                  }}
-                />
-                <small>Formate: JPG, PNG, WebP</small>
-              </div>
-            </div>
-
-            <div className="modal-actions">
-              <button onClick={() => setShowUploadModal(null)}>
-                Mbyll
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Schedule Component
+const Schedule = () => {
+  const [schedule, setSchedule] = useState([]);
+
+  useEffect(() => {
+    fetchSchedule();
+  }, []);
+
+  const fetchSchedule = async () => {
+    try {
+      const response = await axios.get(`${API}/schedule`);
+      setSchedule(response.data);
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+    }
+  };
+
+  const dayNames = ['Hënë', 'Martë', 'Mërkurë', 'Enjte', 'Premte', 'Shtunë', 'Diel'];
+
+  return (
+    <div className="schedule">
+      <div className="schedule-header">
+        <h3>📅 Programi i Transmetimeve</h3>
+      </div>
+
+      <div className="schedule-list">
+        {schedule.map(item => (
+          <div key={item.id} className="schedule-item">
+            <div className="schedule-time">
+              <div className="day">{dayNames[item.day_of_week]}</div>
+              <div className="time">{item.time_start} - {item.time_end}</div>
+            </div>
+            <div className="schedule-program">
+              <h4>{item.program_name}</h4>
+              <p>{item.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
 
 // Main App Component
 function App() {
-  const [currentView, setCurrentView] = useState('vr'); // 'vr' or 'admin'
-  const [products, setProducts] = useState([]);
-  const [shopSettings, setShopSettings] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [activeTab, setActiveTab] = useState('radio');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [streamData, setStreamData] = useState(null);
 
   useEffect(() => {
-    loadInitialData();
+    fetchStreamData();
   }, []);
 
-  const loadInitialData = async () => {
+  const fetchStreamData = async () => {
     try {
-      // Load products
-      const productsResponse = await axios.get(`${API}/products`);
-      setProducts(productsResponse.data);
-
-      // Load shop settings
-      const settingsResponse = await axios.get(`${API}/shop-settings`);
-      setShopSettings(settingsResponse.data);
-
-      // Load categories
-      const categoriesResponse = await axios.get(`${API}/categories`);
-      setCategories(categoriesResponse.data);
-
-      // Load analytics
-      const analyticsResponse = await axios.get(`${API}/analytics`);
-      setAnalytics(analyticsResponse.data);
-
+      const response = await axios.get(`${API}/radio-stream`);
+      setStreamData(response.data);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error fetching stream data:', error);
     }
   };
 
-  const handleProductClick = (product) => {
-    setSelectedProduct(product);
+  const handlePlayPause = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  const tabs = [
+    { id: 'radio', name: 'Radio', icon: '📻' },
+    { id: 'prayer', name: 'Namazi', icon: '🕌' },
+    { id: 'qibla', name: 'Kibla', icon: '🧭' },
+    { id: 'dhikr', name: 'Dhikr', icon: '📿' },
+    { id: 'articles', name: 'Artikuj', icon: '📚' },
+    { id: 'schedule', name: 'Programi', icon: '📅' }
+  ];
+
+  const renderContent = () => {
+    switch(activeTab) {
+      case 'prayer':
+        return <PrayerTimes />;
+      case 'qibla':
+        return <QiblaCompass />;
+      case 'dhikr':
+        return <DhikrCounter />;
+      case 'articles':
+        return <Articles />;
+      case 'schedule':
+        return <Schedule />;
+      default:
+        return (
+          <div className="radio-tab">
+            <div className="welcome-section">
+              <div className="logo-container">
+                <div className="logo">🕌</div>
+                <h1>RTV El-Kalem</h1>
+                <p className="tagline">زكي قلبك - Zgjoje zemrën tënde</p>
+              </div>
+              
+              <div className="live-status">
+                <div className="live-dot"></div>
+                Radio Islam në Shqip
+              </div>
+            </div>
+
+            {streamData && (
+              <AudioPlayer 
+                streamUrl={streamData.url}
+                isPlaying={isPlaying}
+                onPlayPause={handlePlayPause}
+                currentProgram={streamData.current_program}
+              />
+            )}
+
+            <div className="features-grid">
+              <div className="feature-card" onClick={() => setActiveTab('prayer')}>
+                <div className="feature-icon">🕌</div>
+                <h3>Orët e Namazit</h3>
+                <p>Oraret e sakta të namazeve për vendndodhjen tuaj</p>
+              </div>
+
+              <div className="feature-card" onClick={() => setActiveTab('qibla')}>
+                <div className="feature-icon">🧭</div>
+                <h3>Drejtimi i Kiblës</h3>
+                <p>Gjeni drejtimin e saktë të Kiblës me kompas</p>
+              </div>
+
+              <div className="feature-card" onClick={() => setActiveTab('dhikr')}>
+                <div className="feature-icon">📿</div>
+                <h3>Numëruesi i Dhikrit</h3>
+                <p>Numëroni dhikrin dhe lutjet tuaja</p>
+              </div>
+
+              <div className="feature-card" onClick={() => setActiveTab('articles')}>
+                <div className="feature-icon">📚</div>
+                <h3>Artikuj Edukativë</h3>
+                <p>Lexoni artikuj dhe mësime fetare në shqip</p>
+              </div>
+            </div>
+
+            <div className="social-links">
+              <h4>Na ndiqni në rrjetet sociale:</h4>
+              <div className="social-buttons">
+                <a href="https://www.facebook.com/RtvElkalem" target="_blank" rel="noopener noreferrer">
+                  📘 Facebook
+                </a>
+                <a href="https://www.youtube.com/c/RtvElKalem" target="_blank" rel="noopener noreferrer">
+                  📺 YouTube
+                </a>
+                <a href="https://www.instagram.com/rtvelkalem/" target="_blank" rel="noopener noreferrer">
+                  📷 Instagram
+                </a>
+              </div>
+            </div>
+          </div>
+        );
+    }
   };
 
   return (
-    <div className="App">
-      {/* Navigation Header */}
+    <div className="App islamic-app">
+      {/* Header */}
       <div className="app-header">
         <div className="header-content">
-          <h1>🕶️ {shopSettings?.shop_name || 'Dyqani VR Modern'}</h1>
-          <div className="view-toggle">
-            <button 
-              className={currentView === 'vr' ? 'active' : ''} 
-              onClick={() => setCurrentView('vr')}
-            >
-              Pamja VR
-            </button>
-            <button 
-              className={currentView === 'admin' ? 'active' : ''} 
-              onClick={() => setCurrentView('admin')}
-            >
-              Paneli Admin
-            </button>
+          <div className="header-left">
+            <div className="app-logo">🕌</div>
+            <div className="app-title">
+              <h1>RTV El-Kalem</h1>
+              <p>Radio Islam në Shqip</p>
+            </div>
+          </div>
+          <div className="header-right">
+            {streamData && (
+              <div className="header-player">
+                <button 
+                  className={`mini-play-btn ${isPlaying ? 'playing' : ''}`}
+                  onClick={handlePlayPause}
+                >
+                  {isPlaying ? '⏸️' : '▶️'}
+                </button>
+                <div className="mini-live">
+                  <span className="live-dot"></span>
+                  LIVE
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      {currentView === 'vr' ? (
-        <VRShop 
-          products={products} 
-          shopSettings={shopSettings}
-          onProductClick={handleProductClick}
-        />
-      ) : (
-        <AdminPanel 
-          products={products}
-          setProducts={setProducts}
-          shopSettings={shopSettings}
-          setShopSettings={setShopSettings}
-          categories={categories}
-          analytics={analytics}
-        />
-      )}
+      <div className="main-content">
+        {renderContent()}
+      </div>
 
-      {/* Product Detail Modal */}
-      {selectedProduct && (
-        <div className="modal-overlay" onClick={() => setSelectedProduct(null)}>
-          <div className="modal product-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{selectedProduct.name}</h3>
-            <div className="product-detail">
-              {selectedProduct.thumbnail_url && (
-                <img 
-                  src={`${BACKEND_URL}${selectedProduct.thumbnail_url}`} 
-                  alt={selectedProduct.name} 
-                />
-              )}
-              <div className="product-info">
-                <p><strong>Çmimi:</strong> €{selectedProduct.price}</p>
-                <p><strong>Kategoria:</strong> {selectedProduct.category}</p>
-                <p><strong>Përshkrimi:</strong> {selectedProduct.description}</p>
-                {selectedProduct.model_3d_url && (
-                  <p><strong>Model 3D:</strong> ✅ ({selectedProduct.model_3d_format})</p>
-                )}
-              </div>
-            </div>
-            <button onClick={() => setSelectedProduct(null)}>Mbyll</button>
-          </div>
-        </div>
-      )}
-
-      {/* VR Instructions */}
-      {currentView === 'vr' && (
-        <div className="vr-instructions">
-          <div className="instructions-content">
-            <h4>🎮 Kontrollet:</h4>
-            <p><strong>PC:</strong> WASD ose shigjetat për lëvizje • Mouse për të parë rreth e rrotull</p>
-            <p><strong>Mobile:</strong> Lëvizni telefonin për të parë • Touch për të klikuar</p>
-            <p><strong>VR:</strong> Përdorni kontrollerët për navigim dhe ndërveprim</p>
-            <button onClick={() => document.querySelector('a-scene').enterVR()}>
-              Hyni në VR 🕶️
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Bottom Navigation */}
+      <div className="bottom-nav">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            <span className="tab-icon">{tab.icon}</span>
+            <span className="tab-name">{tab.name}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
